@@ -1,0 +1,2 @@
+import Logo from './Logo';
+export default function Footer() { return <footer><div className="container footer-inner"><div><Logo /><p>Plan diligently. Achieve terrifically.</p></div><div className="footer-links"><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#task-board">Task board</a><a href="#contact">Contact</a></div><small>© {new Date().getFullYear()} Terigent. A fictional product built with care.</small></div></footer>; }
