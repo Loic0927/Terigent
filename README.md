@@ -1,77 +1,106 @@
 # Terigent
 
-Terigent is a fictional project-management SaaS landing page created for the VOLTIX Full Stack Developer Internship Task 1. The name combines **Terrific** and **Diligent**, reflected in the brand promise: **“Plan diligently. Achieve terrifically.”**
-
-The page is a responsive React application with a fully interactive, browser-persisted task-board preview. All product and interface copy is in English.
+Terigent is a responsive project-management SaaS experience built for the VOLTIX Full Stack Developer Internship tasks. It includes an interactive browser-persisted task-board preview and a production-oriented contact inquiry system.
 
 ## Features
 
-- Responsive navigation, hero, features, workflow, benefits, contact, and footer sections
-- Interactive three-column task board: Not Started, In Progress, and Completed
-- Add tasks with title, description, status, priority, deadline, reminder, assignee, and project
-- Move tasks through statuses, mark them complete, reopen them, or delete them
-- Deadline indicators for tasks due soon or overdue
-- Basic required-field, email, and title-length validation
-- Demo tasks persisted in `localStorage`
-- Resettable demo state
-- Mobile, tablet, and desktop layouts
-- Reduced-motion accessibility support and semantic landmarks
+- Responsive React landing page and interactive three-column task board
+- Contact form with Name, Email, Subject, and Message fields
+- Client- and server-side validation with clear field errors and length limits
+- PostgreSQL persistence through the `POST /api/contact` Vercel Function
+- Sending, success, reset, and safe failure states
+- Basic abuse protection: hidden honeypot, 12 KB body limit, and per-instance IP rate limiting
+- Parameterized SQL; database credentials remain server-side
+- Automated API tests and responsive UI verification
 
-## Tech stack
+## Architecture
 
-- React
-- Vite
-- Plain CSS
-- React Icons
-- LocalStorage (front-end demo persistence)
+- **Front end:** React, Vite, React Icons, plain CSS
+- **API:** Vercel Node.js Function in `api/contact.js`
+- **Database:** PostgreSQL via `pg`
+- **Task-board demo storage:** browser `localStorage` (unchanged)
 
-## Run locally
+The API validates and normalizes untrusted input before calling the repository. The repository inserts values with PostgreSQL parameters (`$1` through `$4`), never SQL string concatenation.
+
+## Local setup
+
+Requirements: Node.js 20+, npm, PostgreSQL, and `psql` (or a provider SQL console).
 
 ```bash
 npm install
-npm run dev
+Copy-Item .env.example .env.local
 ```
 
-Open the local URL printed by Vite. To create a production build:
+Edit `.env.local` with your own PostgreSQL connection string. Do not commit it.
+
+Create the schema:
 
 ```bash
+psql "$env:DATABASE_URL" -f db/migrations/001_create_inquiries.sql
+```
+
+For a local PostgreSQL server without TLS, set `DATABASE_SSL=false`. For hosted databases, leave it as `true`.
+
+Run the complete app, including the Vercel Function:
+
+```bash
+npx vercel dev
+```
+
+Open the URL printed by Vercel CLI (normally `http://localhost:3000`) and submit the Contact form. `npm run dev` starts only Vite and is useful for front-end-only work; it does not emulate `/api/contact`.
+
+Confirm the saved row:
+
+```sql
+SELECT id, name, email, subject, message, created_at
+FROM inquiries
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | Server-side PostgreSQL connection string |
+| `DATABASE_SSL` | Recommended | `true` for hosted PostgreSQL; `false` only for non-TLS local PostgreSQL |
+
+Neither variable uses the `VITE_` prefix, so Vite does not expose it to browser code.
+
+## Contact API
+
+`POST /api/contact`
+
+```json
+{
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "subject": "Product demo",
+  "message": "I would like to learn more."
+}
+```
+
+Limits: name 100, email 254, subject 150, and message 5,000 characters. A successful insert returns `201`; validation returns `400`; oversized bodies return `413`; rate limiting returns `429`; persistence failures return `500`. Internal database details are never returned to clients.
+
+## Quality checks
+
+```bash
+npm run lint
+npm test
 npm run build
-npm run preview
-```
-
-Automated responsive and console verification (uses an installed Google Chrome):
-
-```bash
 npm run verify:ui
 ```
 
-## Project structure
+This JavaScript project has no separate TypeScript type-check step. ESLint covers static code checks.
 
-```text
-src/
-├── components/        # Independent landing-page and task-board UI components
-├── data/              # Seed/demo data
-├── hooks/             # Reusable browser persistence hook
-├── styles/            # Global design system and responsive styles
-├── App.jsx             # Page composition
-└── main.jsx            # React entry point
-```
+## Deploy to Vercel
 
-Task state is intentionally isolated inside `TaskBoard`, while persistence lives in `useLocalStorage`. This keeps the UI components reusable and makes the browser data layer easy to replace with an API client later.
+1. Create a managed PostgreSQL database (for example Neon, Supabase, or a Vercel Marketplace PostgreSQL integration).
+2. Run `db/migrations/001_create_inquiries.sql` against the production database exactly once. The migration is idempotent.
+3. Import this Git repository into Vercel.
+4. Keep the detected **Vite** framework preset. Build command: `npm run build`; output directory: `dist`.
+5. In Project Settings → Environment Variables, add `DATABASE_URL` and `DATABASE_SSL=true` for Production and Preview as appropriate.
+6. Deploy, then submit the Contact form on the deployed site.
+7. Verify the request returns `201` in Vercel Function logs and confirm the row with the SQL query above.
 
-## Future FastAPI and PostgreSQL integration
-
-1. Add a `src/services/api.js` module that exposes task functions such as `listTasks`, `createTask`, `updateTask`, and `deleteTask`.
-2. Replace `useLocalStorage` calls in `TaskBoard` with those service functions (or a server-state library such as TanStack Query).
-3. Create a FastAPI application with `/api/tasks` CRUD endpoints and Pydantic request/response schemas matching the current task shape.
-4. Model users, projects, tasks, assignments, and reminders in PostgreSQL; use SQLAlchemy and Alembic for persistence and migrations.
-5. Configure Vite with an environment-based API URL (`VITE_API_BASE_URL`) and configure CORS in FastAPI for the deployed front end.
-6. Add authentication and ownership checks only when user accounts become part of the product scope.
-
-## Future reminder system
-
-The current reminder field stores the user's preference but intentionally sends no notification. A production version could store a computed `remind_at` timestamp in PostgreSQL. FastAPI would enqueue scheduled jobs through Celery/RQ with Redis, or a managed task queue. A worker would deliver email or push notifications, record delivery status, and retry transient failures. Store timestamps in UTC and convert them using each user's timezone. Browser notifications would also require explicit permission and a service worker.
-
-## Scope
-
-This Task 1 implementation intentionally does not include accounts, authentication, a backend, a database, email delivery, or real notifications. The contact form is a UI demonstration and does not transmit data.
+Do not put credentials in source files or variables prefixed with `VITE_`. The in-memory rate limiter is intentionally lightweight and scoped to each serverless instance; use a shared Redis-backed limiter if stronger cross-instance enforcement is later required.

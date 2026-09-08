@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS inquiries (
+  id BIGSERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  subject VARCHAR(150) NOT NULL,
+  message VARCHAR(5000) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS inquiries_created_at_idx
+  ON inquiries (created_at DESC);
