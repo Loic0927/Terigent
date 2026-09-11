@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { HiOutlineBars3, HiOutlineXMark } from 'react-icons/hi2';
 import Logo from './Logo';
 
-const links = [['Features', '#features'], ['How it works', '#how-it-works'], ['Task board', '#task-board'], ['Benefits', '#benefits']];
+const links = [['Features', '#features'], ['How it works', '#how-it-works'], ['Task board', '#task-board'], ['Announcements', '#announcements'], ['Benefits', '#benefits']];
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);

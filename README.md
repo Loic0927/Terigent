@@ -1,106 +1,137 @@
 # Terigent
 
-Terigent is a responsive project-management SaaS experience built for the VOLTIX Full Stack Developer Internship tasks. It includes an interactive browser-persisted task-board preview and a production-oriented contact inquiry system.
+Terigent is a responsive React/Vite site for the VOLTIX full-stack tasks. Task 2 provides a PostgreSQL contact form. Task 3 adds a public announcement board and a secured single-administrator management page with persistent PostgreSQL CRUD.
 
-## Features
+## Task 3 feature summary
 
-- Responsive React landing page and interactive three-column task board
-- Contact form with Name, Email, Subject, and Message fields
-- Client- and server-side validation with clear field errors and length limits
-- PostgreSQL persistence through the `POST /api/contact` Vercel Function
-- Sending, success, reset, and safe failure states
-- Basic abuse protection: hidden honeypot, 12 KB body limit, and per-instance IP rate limiting
-- Parameterized SQL; database credentials remain server-side
-- Automated API tests and responsive UI verification
+- Public announcements at `/#announcements`, newest first, with loading, empty, and failure states
+- Administrator UI at `/admin` for creating, editing, and deleting announcements
+- Public `GET /api/announcements`; authenticated `POST /api/announcements`, `PATCH /api/announcements/:id`, and `DELETE /api/announcements/:id`
+- Server-verified, eight-hour HMAC session in an HttpOnly, SameSite=Strict cookie (Secure in production)
+- Origin validation on login, logout, and every announcement mutation
+- Passwords verified using Node.js `crypto.scrypt`; no password or secret is stored in source
+- PostgreSQL-backed login throttling: five failed attempts per hashed IP-and-username key in 15 minutes
+- Parameterized PostgreSQL queries, server-side validation, safe errors, and plain-text React rendering
 
-## Architecture
+## Architecture and database
 
-- **Front end:** React, Vite, React Icons, plain CSS
-- **API:** Vercel Node.js Function in `api/contact.js`
-- **Database:** PostgreSQL via `pg`
-- **Task-board demo storage:** browser `localStorage` (unchanged)
+- Front end: React, Vite, React Icons, plain CSS
+- API: Vercel Node.js Functions under `api/`
+- Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
+- Migrations: `db/migrations/001_create_inquiries.sql`, then `db/migrations/002_create_announcements_and_admin_login_attempts.sql`
 
-The API validates and normalizes untrusted input before calling the repository. The repository inserts values with PostgreSQL parameters (`$1` through `$4`), never SQL string concatenation.
+The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
 ## Local setup
 
-Requirements: Node.js 20+, npm, PostgreSQL, and `psql` (or a provider SQL console).
+Requirements: Node.js 20.19+ or 22.12+, npm, PostgreSQL, and either `psql` or the provider's SQL editor.
 
-```bash
+```powershell
 npm install
 Copy-Item .env.example .env.local
 ```
 
-Edit `.env.local` with your own PostgreSQL connection string. Do not commit it.
+Fill `.env.local` with a non-production database and administrator values. To generate the password hash and a random session secret without putting the password in PowerShell history:
 
-Create the schema:
-
-```bash
-psql "$env:DATABASE_URL" -f db/migrations/001_create_inquiries.sql
+```powershell
+$securePassword = Read-Host 'Admin password (minimum 12 characters)' -AsSecureString
+$credential = [System.Net.NetworkCredential]::new('', $securePassword)
+$env:ADMIN_PASSWORD = $credential.Password
+node scripts/generate-admin-credentials.mjs
+Remove-Item Env:ADMIN_PASSWORD
+Remove-Variable credential, securePassword
 ```
 
-For a local PostgreSQL server without TLS, set `DATABASE_SSL=false`. For hosted databases, leave it as `true`.
+Copy the two output lines into `.env.local`. Set `ADMIN_USERNAME` separately. Do not commit either output. Create schemas in order:
 
-Run the complete app, including the Vercel Function:
+```powershell
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/001_create_inquiries.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/002_create_announcements_and_admin_login_attempts.sql
+```
 
-```bash
+If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
+
+Run the front end and Functions together:
+
+```powershell
 npx vercel dev
 ```
 
-Open the URL printed by Vercel CLI (normally `http://localhost:3000`) and submit the Contact form. `npm run dev` starts only Vite and is useful for front-end-only work; it does not emulate `/api/contact`.
-
-Confirm the saved row:
-
-```sql
-SELECT id, name, email, subject, message, created_at
-FROM inquiries
-ORDER BY created_at DESC
-LIMIT 10;
-```
+Open `http://localhost:3000`, then `http://localhost:3000/admin`. Plain `npm run dev` runs Vite only and does not emulate `/api/*`.
 
 ## Environment variables
 
-| Variable | Required | Description |
+| Variable | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Server-side PostgreSQL connection string |
-| `DATABASE_SSL` | Recommended | `true` for hosted PostgreSQL; `false` only for non-TLS local PostgreSQL |
+| `DATABASE_URL` | Yes | Existing server-side PostgreSQL connection string; prefer a pooled Neon string for Vercel |
+| `DATABASE_SSL` | Yes | `true` for Neon/hosted PostgreSQL; `false` only for a local non-TLS server |
+| `ADMIN_USERNAME` | Yes | Single administrator username |
+| `ADMIN_PASSWORD_HASH` | Yes | `scrypt$...` value generated by the script |
+| `SESSION_SECRET` | Yes | Random signing key generated by the script; minimum 32 characters |
 
-Neither variable uses the `VITE_` prefix, so Vite does not expose it to browser code.
+None uses a `VITE_` prefix, so none is bundled into browser JavaScript.
 
-## Contact API
+To change the administrator username or password, generate a new hash, update `ADMIN_USERNAME` and/or `ADMIN_PASSWORD_HASH` in the relevant Vercel environments, then redeploy. Changing `SESSION_SECRET` signs every administrator out; use it for deliberate session invalidation.
 
-`POST /api/contact`
+## Neon migration
 
-```json
-{
-  "name": "Ada Lovelace",
-  "email": "ada@example.com",
-  "subject": "Product demo",
-  "message": "I would like to learn more."
-}
-```
+No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
-Limits: name 100, email 254, subject 150, and message 5,000 characters. A successful insert returns `201`; validation returns `400`; oversized bodies return `413`; rate limiting returns `429`; persistence failures return `500`. Internal database details are never returned to clients.
+Run migration 002 once against each environment's database, after migration 001. Both use `IF NOT EXISTS`, but migration order should still be preserved.
+
+Neon SQL Editor alternative:
+
+1. Open the intended Neon project and select the correct branch/database.
+2. Open **SQL Editor**.
+3. Open `db/migrations/002_create_announcements_and_admin_login_attempts.sql` locally, copy its complete contents, paste them into the editor, and run.
+4. Confirm both `announcements` and `admin_login_attempts` exist. Do not run test `DELETE` statements against Production.
+
+## Vercel deployment sequence
+
+1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
+2. Run migrations 001 then 002 on a newly created Preview/Development database; run only migration 002 on an existing Task 2 database that already has `inquiries`.
+3. In Vercel: project → **Settings** → **Environment Variables**, add the five variables above. Preserve the existing Production `DATABASE_URL` and `DATABASE_SSL` values.
+4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
+5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all Task 2 and Task 3 behavior there.
+6. After Preview passes, ensure migration 002 has run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
+
+Environment-variable changes affect only new deployments, so adding or rotating any of these values requires redeployment. Database migration alone does not require redeployment, but deploy only after its target schema is ready.
+
+## Deployment verification
+
+Use the Preview URL first, then repeat on the production URL without destructive production test data unless approved:
+
+1. Open `/` and verify the announcement section loads for a signed-out visitor.
+2. In a private window, call/open `/api/announcements`; expect `200` JSON.
+3. Attempt `POST /api/announcements` without a session; expect `401`.
+4. Open `/admin`, sign in, create a short uniquely named announcement, and confirm it appears in the list.
+5. Open `/` in another tab, reload, and confirm the same announcement appears newest first.
+6. Edit it in `/admin`, reload the public page, and confirm content and updated time change.
+7. Delete it after the confirmation dialog and confirm it disappears publicly.
+8. Submit the existing contact form and confirm its normal success response; verify the `inquiries` table if this is a non-production environment.
+9. Sign out, reload `/admin`, and confirm editing controls require login again.
+
+The UI prevents blank/overlong input. Automated handler tests also cover blank values, 101-character titles, invalid IDs, missing rows, unauthorized writes, cross-origin writes, and logout.
 
 ## Quality checks
 
-```bash
+```powershell
 npm run lint
 npm test
 npm run build
 npm run verify:ui
 ```
 
-This JavaScript project has no separate TypeScript type-check step. ESLint covers static code checks.
+API tests use injected repositories and do not touch a real database. Live persistence must be verified against a safe Development/Preview database after migration.
 
-## Deploy to Vercel
+## Troubleshooting and logs
 
-1. Create a managed PostgreSQL database (for example Neon, Supabase, or a Vercel Marketplace PostgreSQL integration).
-2. Run `db/migrations/001_create_inquiries.sql` against the production database exactly once. The migration is idempotent.
-3. Import this Git repository into Vercel.
-4. Keep the detected **Vite** framework preset. Build command: `npm run build`; output directory: `dist`.
-5. In Project Settings → Environment Variables, add `DATABASE_URL` and `DATABASE_SSL=true` for Production and Preview as appropriate.
-6. Deploy, then submit the Contact form on the deployed site.
-7. Verify the request returns `201` in Vercel Function logs and confirm the row with the SQL query above.
+- Login failure: confirm all three admin variables are set in the environment of the deployment being visited, then redeploy. Five failures for the same hashed IP/username key cause a 15-minute cooldown stored in PostgreSQL.
+- Database connection or API 500: confirm `DATABASE_URL`, `DATABASE_SSL=true`, the correct Neon branch, and migration 002. Do not paste connection strings into tickets, screenshots, chat, or logs.
+- Dashboard logs: Vercel project → deployment → **Logs**, filter to Functions and `/api/auth/*` or `/api/announcements*`. The application logs only short operation labels and error messages; still redact URLs, hostnames, usernames, SQL, cookies, and credentials before sharing.
+- CLI logs: `vercel logs --deployment <deployment-id> --level error` for Preview, or `vercel logs --environment production --level error --since 5m` for recent Production errors.
+- A `500` from `/api/announcements` immediately after deployment usually means migration 002 has not run on the exact database selected by that deployment environment.
 
-Do not put credentials in source files or variables prefixed with `VITE_`. The in-memory rate limiter is intentionally lightweight and scoped to each serverless instance; use a shared Redis-backed limiter if stronger cross-instance enforcement is later required.
+## Task 2 contact API
+
+`POST /api/contact` remains unchanged. It persists validated name, email, subject, and message values to `inquiries`. Migration 002 does not modify that table, and the existing Task 2 tests continue to run with Task 3 tests.
