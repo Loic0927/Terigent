@@ -1,19 +1,42 @@
 # Terigent
 
-Terigent is a responsive React/Vite site for the VOLTIX full-stack tasks. Task 2 provides a PostgreSQL contact form. Task 3 adds a public announcement board and a secured single-administrator management page with persistent PostgreSQL CRUD.
+Terigent is a responsive React/Vite project completed across the three VOLTIX full-stack tasks. It progresses from a responsive task-management interface, to a persistent contact API, and finally to a secured announcement management system.
 
-## Task 3 feature summary
+## Task 1 - Responsive task-management interface
 
-- Public announcements at `/#announcements`, newest first, with loading, empty, and failure states
+- Responsive landing page for desktop and mobile
+- Interactive three-column task board for not started, in-progress, and completed work
+- Add, move, complete, reopen, and remove demonstration tasks
+- Priority, deadline, reminder, assignee, and project information
+- Browser persistence for the Task 1 interactive demonstration
+
+Task 1 is a front-end product demonstration. Its task-board data intentionally uses browser storage and is separate from the PostgreSQL-backed Task 2 and Task 3 features.
+
+## Task 2 - Contact inquiry system
+
+- Contact form with name, email, subject, and message fields
+- Client- and server-side validation with clear errors and field limits
+- PostgreSQL persistence through `POST /api/contact`
+- Sending, success, reset, and safe failure states
+- Honeypot protection, request-size limits, rate limiting, and parameterized SQL
+
+Contact inquiries are stored in the `inquiries` table created by `db/migrations/001_create_inquiries.sql`.
+
+## Task 3 - Internal content management
+
+### Features
+
+- A pinned public announcement bar that opens a scrollable list of every announcement, newest first
 - Administrator UI at `/admin` for creating, editing, and deleting announcements
+- Signed-in administrators can manage announcements or open a specific announcement editor directly from the public list
 - Public `GET /api/announcements`; authenticated `POST /api/announcements`, `PATCH /api/announcements/:id`, and `DELETE /api/announcements/:id`
 - Server-verified, eight-hour HMAC session in an HttpOnly, SameSite=Strict cookie (Secure in production)
 - Origin validation on login, logout, and every announcement mutation
-- Passwords verified using Node.js `crypto.scrypt`; no password or secret is stored in source
+- Passwords are verified using Node.js `crypto.scrypt`; the production password hash and session secret remain in Vercel environment variables
 - PostgreSQL-backed login throttling: five failed attempts per hashed IP-and-username key in 15 minutes
 - Parameterized PostgreSQL queries, server-side validation, safe errors, and plain-text React rendering
 
-## Architecture and database
+## Shared architecture and database
 
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
@@ -22,7 +45,7 @@ Terigent is a responsive React/Vite site for the VOLTIX full-stack tasks. Task 2
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
-## Local setup
+## Local development
 
 Requirements: Node.js 20.19+ or 22.12+, npm, PostgreSQL, and either `psql` or the provider's SQL editor.
 
@@ -73,7 +96,7 @@ None uses a `VITE_` prefix, so none is bundled into browser JavaScript.
 
 To change the administrator username or password, generate a new hash, update `ADMIN_USERNAME` and/or `ADMIN_PASSWORD_HASH` in the relevant Vercel environments, then redeploy. Changing `SESSION_SECRET` signs every administrator out; use it for deliberate session invalidation.
 
-## Neon migration
+## Database migrations with Neon
 
 No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
@@ -86,7 +109,7 @@ Neon SQL Editor alternative:
 3. Open `db/migrations/002_create_announcements_and_admin_login_attempts.sql` locally, copy its complete contents, paste them into the editor, and run.
 4. Confirm both `announcements` and `admin_login_attempts` exist. Do not run test `DELETE` statements against Production.
 
-## Vercel deployment sequence
+## Vercel deployment
 
 1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
 2. Run migrations 001 then 002 on a newly created Preview/Development database; run only migration 002 on an existing Task 2 database that already has `inquiries`.
@@ -132,6 +155,9 @@ API tests use injected repositories and do not touch a real database. Live persi
 - CLI logs: `vercel logs --deployment <deployment-id> --level error` for Preview, or `vercel logs --environment production --level error --since 5m` for recent Production errors.
 - A `500` from `/api/announcements` immediately after deployment usually means migration 002 has not run on the exact database selected by that deployment environment.
 
-## Task 2 contact API
+## Reviewer access
 
-`POST /api/contact` remains unchanged. It persists validated name, email, subject, and message values to `inquiries`. Migration 002 does not modify that table, and the existing Task 2 tests continue to run with Task 3 tests.
+The following temporary credentials provide access only to the announcement-management interface. They do not expose database or Vercel credentials. Rotate the administrator password after the review period.
+
+admin name: Bob
+admin password: Wesleysohandsome
