@@ -7,6 +7,7 @@ const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 export function createAnnouncementsHandler(repository) {
   return async function announcementsHandler(req, res) {
     if (req.method === 'GET') {
+      res.setHeader('Cache-Control', 'no-store');
       try { return send(res, 200, { announcements: await repository.listAnnouncements() }); }
       catch (error) {
         console.error('Announcement list failed:', error instanceof Error ? error.message : 'Unknown error');

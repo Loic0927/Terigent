@@ -36,6 +36,7 @@ export function createLoginHandler(repository) {
 
 export function sessionHandler(req, res) {
   if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return send(res, 405, { error: 'Method not allowed.' }); }
+  res.setHeader('Cache-Control', 'no-store');
   return send(res, 200, { authenticated: isAdmin(req) });
 }
 

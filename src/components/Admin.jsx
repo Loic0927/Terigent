@@ -34,7 +34,25 @@ export default function Admin() {
 
   const load = useCallback(async () => {
     setListState('loading');
-    try { const payload = await api('/api/announcements'); setItems(payload.announcements || []); setListState('ready'); }
+    try {
+      const payload = await api('/api/announcements');
+      const announcements = payload.announcements || [];
+      setItems(announcements); setListState('ready');
+      const requestedId = new URLSearchParams(window.location.search).get('edit');
+      if (requestedId !== null) {
+        window.history.replaceState(null, '', '/admin');
+        if (!/^[1-9]\d*$/.test(requestedId)) {
+          setEditing(null); setForm(EMPTY); setFormState({ sending: false, errors: {}, notice: 'The requested announcement ID is invalid. You can choose an announcement from the list below.', success: false });
+        } else {
+          const requested = announcements.find(item => item.id === requestedId);
+          if (requested) {
+            setEditing(requested.id); setForm({ title: requested.title, content: requested.content }); setFormState({ sending: false, errors: {}, notice: '', success: false });
+          } else {
+            setEditing(null); setForm(EMPTY); setFormState({ sending: false, errors: {}, notice: 'The requested announcement was not found. It may have been deleted.', success: false });
+          }
+        }
+      }
+    }
     catch { setListState('error'); }
   }, []);
   useEffect(() => { api('/api/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) load(); }).catch(() => setAuth('anonymous')); }, [load]);
@@ -64,12 +82,12 @@ export default function Admin() {
   };
 
   if (auth === 'checking') return <main className="admin-shell"><p role="status">Checking administrator session...</p></main>;
-  if (auth === 'anonymous') return <main className="admin-shell"><div className="admin-login"><Logo /><a href="/" className="admin-back"><HiOutlineArrowLeft /> Back to site</a><h1>Administrator sign in</h1><p>Sign in to manage public announcements.</p><form onSubmit={submitLogin}>
+  if (auth === 'anonymous') return <main className="admin-shell"><div className="admin-login"><Logo /><a href="/?openAnnouncements=1#announcements" className="admin-back"><HiOutlineArrowLeft /> Back to announcements</a><h1>Administrator sign in</h1><p>Sign in to manage public announcements.</p><form onSubmit={submitLogin}>
     <label>Username<input autoComplete="username" value={login.username} onChange={e => setLogin({ ...login, username: e.target.value })} required /></label><label>Password<input type="password" autoComplete="current-password" value={login.password} onChange={e => setLogin({ ...login, password: e.target.value })} required /></label>
     {loginState.error && <p className="admin-notice error" role="alert">{loginState.error}</p>}<button className="button" disabled={loginState.sending}>{loginState.sending ? 'Signing in...' : 'Sign in'}</button>
   </form></div></main>;
 
-  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Announcement management</h1></div><div><a className="button button-ghost button-small" href="/"><HiOutlineArrowLeft /> View site</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
+  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Announcement management</h1></div><div><a className="button button-ghost button-small" href="/?openAnnouncements=1#announcements"><HiOutlineArrowLeft /> Back to announcements</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
     <section className="admin-panel"><h2>{editing ? 'Edit announcement' : 'New announcement'}</h2><form className="admin-form" onSubmit={submitAnnouncement} noValidate>
       <label>Title <span>{form.title.length}/{LIMITS.title}</span><input value={form.title} maxLength={LIMITS.title} onChange={e => setForm({ ...form, title: e.target.value })} aria-invalid={Boolean(formState.errors.title)} />{formState.errors.title && <small>{formState.errors.title}</small>}</label>
       <label>Content <span>{form.content.length}/{LIMITS.content}</span><textarea rows="7" value={form.content} maxLength={LIMITS.content} onChange={e => setForm({ ...form, content: e.target.value })} aria-invalid={Boolean(formState.errors.content)} />{formState.errors.content && <small>{formState.errors.content}</small>}</label>

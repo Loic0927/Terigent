@@ -14,9 +14,25 @@ async function call(handler, method, { body, id, authenticated = false } = {}) {
 }
 
 test('public can list announcements newest first through repository result', async () => {
-  const items = [{ id: '2', title: 'New', content: 'Latest' }];
+  const items = [
+    { id: '3', title: 'Newest', content: 'Third' },
+    { id: '2', title: 'Second', content: 'Second' },
+    { id: '1', title: 'Oldest', content: 'First' },
+  ];
   const res = await call(createAnnouncementsHandler({ listAnnouncements: async () => items }), 'GET');
   assert.equal(res.statusCode, 200); assert.deepEqual(res.payload.announcements, items);
+  assert.equal(res.payload.announcements.length, 3);
+  assert.equal(res.headers['Cache-Control'], 'no-store');
+});
+
+test('public list preserves zero, one, and two announcement result sets', async () => {
+  for (const count of [0, 1, 2]) {
+    const items = Array.from({ length: count }, (_, index) => ({ id: String(count - index), title: `Title ${index}`, content: `Content ${index}` }));
+    const res = await call(createAnnouncementsHandler({ listAnnouncements: async () => items }), 'GET');
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.payload.announcements, items);
+    assert.equal(res.payload.announcements.length, count);
+  }
 });
 
 test('anonymous users cannot create, edit, or delete', async () => {
