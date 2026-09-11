@@ -12,13 +12,13 @@ import Admin from './components/Admin';
 export default function App() {
   if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') return <Admin />;
   return <>
+    <Announcements />
     <Navbar />
     <main>
       <Hero />
       <Features />
       <HowItWorks />
       <TaskBoard />
-      <Announcements />
       <Benefits />
       <Contact />
     </main>
