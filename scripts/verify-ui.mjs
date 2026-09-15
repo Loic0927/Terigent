@@ -16,7 +16,7 @@ try {
     const page = await browser.newPage({ viewport });
     const errors = [];
     await page.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
-    await page.route('**/api/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: false }) }));
+    await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
@@ -40,7 +40,7 @@ try {
   const adminPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const adminErrors = [];
   await adminPage.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
-  await adminPage.route('**/api/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true }) }));
+  await adminPage.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true }) }));
   adminPage.on('pageerror', error => adminErrors.push(error.message));
   await adminPage.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
   await adminPage.locator('.announcement-pin-trigger').click();

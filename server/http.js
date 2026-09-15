@@ -13,6 +13,7 @@ export function parseBody(req, maxBytes = 12_000) {
 }
 
 export function clientIp(req) {
-  const forwarded = req.headers?.['x-forwarded-for'];
-  return ((Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0] || req.socket?.remoteAddress || 'unknown').trim();
+  const realIp = req.headers?.['x-real-ip'];
+  const forwarded = process.env.VERCEL ? req.headers?.['x-forwarded-for'] : null;
+  return ((Array.isArray(realIp) ? realIp[0] : realIp) || (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0] || req.socket?.remoteAddress || 'unknown').trim();
 }

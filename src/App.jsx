@@ -8,9 +8,13 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import Announcements from './components/Announcements';
 import Admin from './components/Admin';
+import { Account, AuthPage } from './components/MemberAuth';
 
 export default function App() {
   if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') return <Admin />;
+  if (/^\/register\/?$/.test(window.location.pathname)) return <AuthPage mode="register" />;
+  if (/^\/login\/?$/.test(window.location.pathname)) return <AuthPage mode="login" />;
+  if (/^\/account\/?$/.test(window.location.pathname)) return <Account />;
   return <>
     <Announcements />
     <Navbar />

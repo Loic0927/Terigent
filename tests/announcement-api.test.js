@@ -7,9 +7,10 @@ process.env.SESSION_SECRET = 'test-only-session-secret-with-more-than-32-charact
 const originHeaders = { origin: 'http://localhost', host: 'localhost', 'x-forwarded-proto': 'http' };
 
 function response() { return { statusCode: 200, headers: {}, setHeader(name, value) { this.headers[name] = value; }, status(code) { this.statusCode = code; return this; }, json(payload) { this.payload = payload; return this; } }; }
-async function call(handler, method, { body, id, authenticated = false } = {}) {
+async function call(handler, method, { body, id, authenticated = false, cookie } = {}) {
   const res = response(); const headers = { ...originHeaders };
   if (authenticated) headers.cookie = sessionCookie(createSession('admin')).split(';')[0];
+  if (cookie) headers.cookie = cookie;
   await handler({ method, headers, body, query: id === undefined ? {} : { id }, socket: {} }, res); return res;
 }
 
@@ -41,6 +42,12 @@ test('anonymous users cannot create, edit, or delete', async () => {
   const handler = createAnnouncementItemHandler(repository);
   assert.equal((await call(handler, 'PATCH', { id: '1', body: { title: 'A', content: 'B' } })).statusCode, 401);
   assert.equal((await call(handler, 'DELETE', { id: '1' })).statusCode, 401);
+});
+
+test('a member session cookie cannot authorize administrator announcement writes', async () => {
+  const repository = { createAnnouncement: async () => assert.fail() };
+  const res = await call(createAnnouncementsHandler(repository), 'POST', { cookie: 'terigent_user_session=valid-member-token', body: { title: 'A', content: 'B' } });
+  assert.equal(res.statusCode, 401);
 });
 
 test('authenticated administrator can complete CRUD operations', async () => {

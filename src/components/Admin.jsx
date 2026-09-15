@@ -55,14 +55,14 @@ export default function Admin() {
     }
     catch { setListState('error'); }
   }, []);
-  useEffect(() => { api('/api/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) load(); }).catch(() => setAuth('anonymous')); }, [load]);
+  useEffect(() => { api('/api/admin/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) load(); }).catch(() => setAuth('anonymous')); }, [load]);
 
   const submitLogin = async event => {
     event.preventDefault(); setLoginState({ sending: true, error: '' });
-    try { await api('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); setAuth('authenticated'); await load(); setLoginState({ sending: false, error: '' }); }
+    try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); setAuth('authenticated'); await load(); setLoginState({ sending: false, error: '' }); }
     catch (error) { setLoginState({ sending: false, error: error.message }); }
   };
-  const logout = async () => { try { await api('/api/auth/logout', { method: 'POST' }); } finally { setAuth('anonymous'); setItems([]); setForm(EMPTY); setEditing(null); } };
+  const logout = async () => { try { await api('/api/admin/auth/logout', { method: 'POST' }); } finally { setAuth('anonymous'); setItems([]); setForm(EMPTY); setEditing(null); } };
   const beginEdit = item => { setEditing(item.id); setForm({ title: item.title, content: item.content }); setFormState({ sending: false, errors: {}, notice: '', success: false }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const cancelEdit = () => { setEditing(null); setForm(EMPTY); setFormState({ sending: false, errors: {}, notice: '', success: false }); };
 

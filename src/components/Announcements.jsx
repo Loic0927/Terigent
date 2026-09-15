@@ -27,13 +27,13 @@ export default function Announcements() {
   }, []);
 
   const checkSession = useCallback(async () => {
-    try { const payload = await getJson('/api/auth/session'); setAuthenticated(Boolean(payload.authenticated)); }
+    try { const payload = await getJson('/api/admin/auth/session'); setAuthenticated(Boolean(payload.authenticated)); }
     catch { setAuthenticated(false); }
   }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([getJson('/api/announcements'), getJson('/api/auth/session')]).then(([announcements, session]) => {
+    Promise.allSettled([getJson('/api/announcements'), getJson('/api/admin/auth/session')]).then(([announcements, session]) => {
       if (!active) return;
       if (announcements.status === 'fulfilled') setState({ status: 'ready', items: announcements.value.announcements || [] });
       else setState({ status: 'error', items: [], error: announcements.reason.message });
