@@ -27,6 +27,8 @@ try {
     if (!panelScrollable) errors.push('Long announcement list did not become vertically scrollable.');
     const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     const sections = await page.locator('main > section').count();
+    if (await page.locator('.nav-links > a', { hasText: /^(Register|Login)$/ }).count()) errors.push('Public navigation still shows Register or Login.');
+    if (await page.locator('.nav-links > a.button').getAttribute('href') !== '/register') errors.push('Get started does not link to registration.');
     if (viewport.name === 'mobile') {
       await page.keyboard.press('Escape');
       await page.locator('.announcement-popover').waitFor({ state: 'detached' });
@@ -66,6 +68,24 @@ try {
   const dashboardOverflow = await dashboardPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   results.push({ viewport: 'member-mobile', sections: 1, expectedSections: 1, horizontalOverflow: dashboardOverflow, consoleErrors: dashboardErrors });
   await dashboardPage.close();
+
+  for (const path of ['login', 'register']) {
+    for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'mobile', width: 390, height: 844 }]) {
+      const authPage = await browser.newPage({ viewport });
+      const authErrors = [];
+      await authPage.route('**/api/auth/me', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign-in is required.' }) }));
+      authPage.on('pageerror', error => authErrors.push(error.message));
+      await authPage.goto(`http://127.0.0.1:4173/${path}`, { waitUntil: 'networkidle' });
+      const top = authPage.locator('.auth-card-top');
+      if (!(await top.locator('.logo').isVisible()) || !(await top.locator('.auth-home').isVisible())) authErrors.push('Auth card top row is incomplete.');
+      if (await top.locator('.auth-home').getAttribute('href') !== '/') authErrors.push('Back to home link is incorrect.');
+      const overlap = await top.evaluate(element => { const [logo, link] = element.children; const a = logo.getBoundingClientRect(); const b = link.getBoundingClientRect(); return a.right > b.left; });
+      if (overlap) authErrors.push('Logo and Back to home overlap.');
+      const overflow = await authPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+      results.push({ viewport: `${path}-${viewport.name}`, sections: 1, expectedSections: 1, horizontalOverflow: overflow, consoleErrors: authErrors });
+      await authPage.close();
+    }
+  }
   await browser.close();
   console.log(JSON.stringify(results, null, 2));
   if (results.some(result => result.horizontalOverflow || result.consoleErrors.length || result.sections !== result.expectedSections)) process.exitCode = 1;
