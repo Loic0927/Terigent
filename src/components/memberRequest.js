@@ -1,0 +1,1 @@
+export default async function memberRequest(url,options){const response=await fetch(url,options);const payload=await response.json().catch(()=>({}));if(!response.ok){const error=new Error(payload.error||'Request failed.');error.status=response.status;error.fields=payload.errors||{};throw error;}return payload;}

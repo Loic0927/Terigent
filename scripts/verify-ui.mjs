@@ -33,7 +33,8 @@ try {
       await page.locator('.menu-button').click();
       if (!(await page.locator('.nav-links').isVisible())) errors.push('Mobile navigation did not open.');
     }
-    results.push({ viewport: viewport.name, sections, horizontalOverflow, consoleErrors: errors });
+    if (await page.locator('#task-board').count()) errors.push('Public homepage still contains the interactive task board.');
+    results.push({ viewport: viewport.name, sections, expectedSections: 5, horizontalOverflow, consoleErrors: errors });
     await page.close();
   }
 
@@ -49,11 +50,25 @@ try {
   await adminPage.waitForURL('**/admin?edit=2');
   await adminPage.locator('.admin-form input').waitFor();
   if (await adminPage.locator('.admin-form input').inputValue() !== 'Second announcement') adminErrors.push('Deep link did not open the requested non-latest announcement.');
-  results.push({ viewport: 'admin-deep-link', sections: 6, horizontalOverflow: false, consoleErrors: adminErrors });
+  results.push({ viewport: 'admin-deep-link', sections: 1, expectedSections: 1, horizontalOverflow: false, consoleErrors: adminErrors });
   await adminPage.close();
+
+  const dashboardPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const dashboardErrors = [];
+  await dashboardPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'Test Member', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
+  await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  dashboardPage.on('pageerror', error => dashboardErrors.push(error.message));
+  await dashboardPage.goto('http://127.0.0.1:4173/dashboard', { waitUntil: 'networkidle' });
+  await dashboardPage.reload({ waitUntil: 'networkidle' });
+  if (!(await dashboardPage.getByText('Welcome,').isVisible())) dashboardErrors.push('Dashboard did not render after direct load and refresh.');
+  await dashboardPage.locator('.member-menu-button').click();
+  if (!(await dashboardPage.locator('.member-nav').isVisible())) dashboardErrors.push('Member mobile navigation did not open.');
+  const dashboardOverflow = await dashboardPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  results.push({ viewport: 'member-mobile', sections: 1, expectedSections: 1, horizontalOverflow: dashboardOverflow, consoleErrors: dashboardErrors });
+  await dashboardPage.close();
   await browser.close();
   console.log(JSON.stringify(results, null, 2));
-  if (results.some(result => result.horizontalOverflow || result.consoleErrors.length || result.sections !== 6)) process.exitCode = 1;
+  if (results.some(result => result.horizontalOverflow || result.consoleErrors.length || result.sections !== result.expectedSections)) process.exitCode = 1;
 } finally {
   await server.close();
 }

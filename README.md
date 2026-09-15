@@ -4,7 +4,7 @@ Terigent is a responsive React/Vite project completed across four VOLTIX full-st
 
 ## Task 4 - Member registration and authentication
 
-- `/register`, `/login`, and protected `/account` pages
+- `/register`, `/login`, protected `/dashboard`, and `/account` pages
 - Member APIs at `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, and `/api/auth/me`
 - Server validation, normalized case-insensitive email uniqueness, salted scrypt password hashes, opaque seven-day sessions, trusted-origin CSRF checks, and PostgreSQL-backed throttling
 - Member cookie `terigent_user_session` and database sessions are fully separate from the Task 3 administrator cookie and `/api/admin/auth/*`; members cannot authorize announcement writes
@@ -12,12 +12,12 @@ Terigent is a responsive React/Vite project completed across four VOLTIX full-st
 ## Task 1 - Responsive task-management interface
 
 - Responsive landing page for desktop and mobile
-- Interactive three-column task board for not started, in-progress, and completed work
-- Add, move, complete, reopen, and remove demonstration tasks
+- Authenticated three-column task board for not started, in-progress, and completed work
+- Add, move, complete, reopen, and remove member-owned tasks
 - Priority, deadline, reminder, assignee, and project information
-- Browser persistence for the Task 1 interactive demonstration
+- PostgreSQL persistence isolated by member account
 
-Task 1 is a front-end product demonstration. Its task-board data intentionally uses browser storage and is separate from the PostgreSQL-backed Task 2 and Task 3 features.
+The public homepage contains the product presentation. The interactive task board is available only in the authenticated member workspace and does not import the former anonymous browser demo data.
 
 ## Task 2 - Contact inquiry system
 
@@ -48,7 +48,7 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
 - Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001`, `002`, then `db/migrations/003_create_users_and_user_sessions.sql`
+- Migrations: run `001`, `002`, `003`, then `db/migrations/004_create_user_tasks.sql`
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
@@ -78,6 +78,7 @@ Copy the two output lines into `.env.local`. Set `ADMIN_USERNAME` separately. Do
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/001_create_inquiries.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/002_create_announcements_and_admin_login_attempts.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/003_create_users_and_user_sessions.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/004_create_user_tasks.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
@@ -110,7 +111,7 @@ To change the administrator username or password, generate a new hash, update `A
 
 No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
-Run migrations 002 and 003 once against each environment's database, after migration 001. They use `IF NOT EXISTS`, but migration order should still be preserved.
+Run migrations 002, 003, and 004 once against each environment's database, after migration 001. Migration 004 is non-destructive and creates only the member-owned task table.
 
 Neon SQL Editor alternative:
 
@@ -122,11 +123,11 @@ Neon SQL Editor alternative:
 ## Vercel deployment
 
 1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
-2. Run migrations 001, 002, then 003 on a new Preview/Development database; run 003 on an existing Task 3 database.
+2. Run migrations 001 through 004 on a new Preview/Development database; run only 004 on an existing Task 4 database.
 3. In Vercel: project → **Settings** → **Environment Variables**, preserve the five existing variables above. Task 4 adds none.
 4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
 5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all Task 2–4 behavior there.
-6. After Preview passes, ensure migration 003 has run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
+6. After Preview passes, ensure migration 004 has run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
 
 Environment-variable changes affect only new deployments, so adding or rotating any of these values requires redeployment. Database migration alone does not require redeployment, but deploy only after its target schema is ready.
 

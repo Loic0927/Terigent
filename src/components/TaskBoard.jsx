@@ -1,21 +1,19 @@
-import { useState } from 'react';
-import { HiOutlinePlus, HiOutlineArrowPath } from 'react-icons/hi2';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { initialTasks } from '../data/initialTasks';
+import { useEffect, useState } from 'react';
+import { HiOutlinePlus } from 'react-icons/hi2';
+import memberRequest from './memberRequest';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
 
 const columns = [['not-started', 'Not Started'], ['in-progress', 'In Progress'], ['completed', 'Completed']];
+const taskData = task => ({ title: task.title, description: task.description, status: task.status, priority: task.priority, deadline: task.deadline, reminder: task.reminder, assignee: task.assignee, project: task.project });
 
-export default function TaskBoard() {
-  const [tasks, setTasks] = useLocalStorage('terigent-demo-tasks', initialTasks);
+export default function TaskBoard({ user }) {
+  const [tasks, setTasks] = useState([]);
+  const [state, setState] = useState({ loading: true, error: '' });
   const [showForm, setShowForm] = useState(false);
-  const updateStatus = (id, status) => setTasks(tasks.map(task => task.id === id ? { ...task, status } : task));
-  const remove = (id) => setTasks(tasks.filter(task => task.id !== id));
-  return <section className="section board-section" id="task-board"><div className="container wide">
-    <div className="board-intro"><div><p className="eyebrow"><span /> INTERACTIVE PREVIEW</p><h2>Try your new<br /><em>command center.</em></h2><p>Add a task, move work forward, and see how clarity changes your day. Your demo is saved in this browser.</p></div><div className="board-actions"><button className="button button-ghost" onClick={() => setTasks(initialTasks)}><HiOutlineArrowPath /> Reset demo</button><button className="button" onClick={() => setShowForm(true)}><HiOutlinePlus /> Add task</button></div></div>
-    <div className="task-board">{columns.map(([status, label]) => { const items = tasks.filter(t => t.status === status); return <div className={`board-column ${status}`} key={status}><div className="column-title"><div><span /><h3>{label}</h3></div><b>{items.length}</b></div><div className="task-list">{items.map(task => <TaskCard key={task.id} task={task} onStatus={updateStatus} onDelete={remove} />)}{!items.length && <div className="empty-column">No tasks here yet.</div>}</div></div>; })}</div>
-    <p className="demo-note">This is a front-end demo. Tasks are stored locally on your device.</p>
-    {showForm && <TaskForm onAdd={task => setTasks([...tasks, task])} onClose={() => setShowForm(false)} />}
-  </div></section>;
+  useEffect(() => { let current = true; memberRequest('/api/tasks').then(payload => { if (current) { setTasks(payload.tasks || []); setState({ loading: false, error: '' }); } }).catch(error => { if (!current) return; if (error.status === 401) window.location.replace('/login?returnTo=%2Fdashboard'); else setState({ loading: false, error: error.message }); }); return () => { current = false; setTasks([]); }; }, []);
+  const add = async task => { const payload = await memberRequest('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(task) }); setTasks(current => [...current, payload.task]); };
+  const updateStatus = async (id, status) => { const existing = tasks.find(task => task.id === id); if (!existing) return; try { const payload = await memberRequest(`/api/tasks/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...taskData(existing), status }) }); setTasks(current => current.map(task => task.id === id ? payload.task : task)); } catch (error) { if (error.status === 401) window.location.replace('/login?returnTo=%2Fdashboard'); else setState(current => ({ ...current, error: error.message })); } };
+  const remove = async id => { try { await memberRequest(`/api/tasks/${id}`, { method: 'DELETE' }); setTasks(current => current.filter(task => task.id !== id)); } catch (error) { if (error.status === 401) window.location.replace('/login?returnTo=%2Fdashboard'); else setState(current => ({ ...current, error: error.message })); } };
+  return <main className="member-main dashboard-main"><section className="board-section"><div className="container wide"><div className="board-intro"><div><p className="eyebrow"><span /> YOUR WORKSPACE</p><h1>Welcome, <em>{user.name}.</em></h1><p>Keep your work moving from first thought to finished task. Reminder choices are saved for planning reference only.</p></div><button className="button" onClick={() => setShowForm(true)}><HiOutlinePlus /> Add task</button></div>{state.error && <p className="auth-notice error" role="alert">{state.error}</p>}{state.loading ? <p role="status">Loading your tasks...</p> : <div className="task-board">{columns.map(([status, label]) => { const items = tasks.filter(task => task.status === status); return <div className={`board-column ${status}`} key={status}><div className="column-title"><div><span /><h3>{label}</h3></div><b>{items.length}</b></div><div className="task-list">{items.map(task => <TaskCard key={task.id} task={task} onStatus={updateStatus} onDelete={remove} />)}{!items.length && <div className="empty-column">{tasks.length ? 'No tasks here yet.' : 'Add your first task to get started.'}</div>}</div></div>; })}</div>}{showForm && <TaskForm onAdd={add} onClose={() => setShowForm(false)} />}</div></section></main>;
 }

@@ -7,8 +7,9 @@ const reminders = ['No reminder', '10 minutes before', '1 hour before', '1 day b
 export default function TaskForm({ onAdd, onClose }) {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
+  const [sending, setSending] = useState(false);
   const update = ({ target }) => setForm({ ...form, [target.name]: target.value });
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     const nextErrors = {};
     if (!form.title.trim()) nextErrors.title = 'A title is required.';
@@ -16,8 +17,9 @@ export default function TaskForm({ onAdd, onClose }) {
     if (form.title.length > 80) nextErrors.title = 'Keep the title under 80 characters.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    onAdd({ ...form, title: form.title.trim(), description: form.description.trim(), id: crypto.randomUUID() });
-    onClose();
+    setSending(true);
+    try { await onAdd({ ...form, title: form.title.trim(), description: form.description.trim() }); onClose(); }
+    catch (error) { setErrors(error.fields || { form: error.message }); setSending(false); }
   };
   return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()} role="presentation">
     <div className="task-modal" role="dialog" aria-modal="true" aria-labelledby="new-task-title">
@@ -31,7 +33,7 @@ export default function TaskForm({ onAdd, onClose }) {
         <label>Reminder<select name="reminder" value={form.reminder} onChange={update}>{reminders.map(x => <option key={x}>{x}</option>)}</select></label>
         <label>Assignee<input name="assignee" value={form.assignee} onChange={update} placeholder="Name" /></label>
         <label>Project<input name="project" value={form.project} onChange={update} placeholder="Project name" /></label>
-        <div className="form-actions full"><button type="button" className="button button-ghost" onClick={onClose}>Cancel</button><button className="button" type="submit">Add task</button></div>
+        {errors.form && <small className="error full" role="alert">{errors.form}</small>}<div className="form-actions full"><button type="button" className="button button-ghost" onClick={onClose} disabled={sending}>Cancel</button><button className="button" type="submit" disabled={sending}>{sending ? 'Adding...' : 'Add task'}</button></div>
       </form>
     </div>
   </div>;

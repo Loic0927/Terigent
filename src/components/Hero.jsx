@@ -1,6 +1,8 @@
+import { useEffect,useState } from 'react';
 import { HiArrowRight, HiCheck, HiOutlineCalendarDays, HiOutlineClock, HiOutlineUserGroup } from 'react-icons/hi2';
 
 export default function Hero() {
+  const [member,setMember]=useState(null);useEffect(()=>{fetch('/api/auth/me').then(response=>response.ok?response.json():null).then(payload=>setMember(payload?.user||false)).catch(()=>setMember(false));},[]);
   return <section className="hero section" aria-labelledby="hero-title">
     <div className="hero-orb orb-one" /><div className="hero-orb orb-two" />
     <div className="container hero-grid">
@@ -8,8 +10,8 @@ export default function Hero() {
         <p className="eyebrow"><span /> Thoughtful work, remarkable results</p>
         <h1 id="hero-title">Make every task<br /><em>count.</em></h1>
         <p className="hero-lead">The calm, considered workspace for people who care about doing great work—not just more work.</p>
-        <div className="hero-actions"><a href="#task-board" className="button">Explore the live board <HiArrowRight /></a><a href="#how-it-works" className="text-link">See how it works</a></div>
-        <div className="hero-proof"><span><HiCheck /> No sign-up</span><span><HiCheck /> Free interactive demo</span></div>
+        <div className="hero-actions">{member!==null&&<a href={member?'/dashboard':'/register'} className="button">{member?'Open workspace':'Get started'} <HiArrowRight /></a>}<a href="#how-it-works" className="text-link">See how it works</a></div>
+        <div className="hero-proof"><span><HiCheck /> Private workspace</span><span><HiCheck /> Your tasks stay with your account</span></div>
       </div>
       <div className="hero-visual" aria-label="Terigent product preview">
         <div className="mini-window">
