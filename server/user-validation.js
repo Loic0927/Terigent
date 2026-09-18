@@ -27,3 +27,11 @@ export function validateLogin(body) {
   if (!email || email.length > EMAIL_MAX || !EMAIL_PATTERN.test(email) || !password || password.length > 128) errors.form = 'Email or password is incorrect.';
   return Object.keys(errors).length ? { valid: false, errors } : { valid: true, data: { email, password } };
 }
+
+export function validateProfileUpdate(body) {
+  const errors = {};
+  if (Object.keys(body).some(key => key !== 'name')) errors.form = 'Request contains unsupported fields.';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (!name || Array.from(name).length > 100) errors.name = 'Name must contain 1–100 characters.';
+  return Object.keys(errors).length ? { valid: false, errors } : { valid: true, data: { name } };
+}

@@ -69,6 +69,37 @@ try {
   results.push({ viewport: 'member-mobile', sections: 1, expectedSections: 1, horizontalOverflow: dashboardOverflow, consoleErrors: dashboardErrors });
   await dashboardPage.close();
 
+  const signedOutDashboard = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const signedOutErrors = [];
+  await signedOutDashboard.route('**/api/auth/me', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign-in is required.' }) }));
+  signedOutDashboard.on('pageerror', error => signedOutErrors.push(error.message));
+  await signedOutDashboard.goto('http://127.0.0.1:4173/dashboard', { waitUntil: 'networkidle' });
+  await signedOutDashboard.waitForURL('**/login?returnTo=%2Fdashboard');
+  if (!signedOutDashboard.url().endsWith('/login?returnTo=%2Fdashboard')) signedOutErrors.push('Signed-out dashboard visitor was not redirected to login.');
+  results.push({ viewport: 'dashboard-signed-out', sections: 1, expectedSections: 1, horizontalOverflow: false, consoleErrors: signedOutErrors });
+  await signedOutDashboard.close();
+
+  const accountPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const accountErrors = [];
+  let profile = { id: '1', name: 'Test Member', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' };
+  await accountPage.route('**/api/auth/me', async route => {
+    if (route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON();
+      profile = { ...profile, name: body.name.trim() };
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ message: 'Account details updated.', user: profile }) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: profile }) });
+  });
+  accountPage.on('pageerror', error => accountErrors.push(error.message));
+  await accountPage.goto('http://127.0.0.1:4173/account', { waitUntil: 'networkidle' });
+  if (!(await accountPage.locator('#account-email').evaluate(element => element.readOnly))) accountErrors.push('Account email is not read-only.');
+  await accountPage.locator('#account-name').fill('Updated Member');
+  await accountPage.getByRole('button', { name: 'Save changes' }).click();
+  if (!(await accountPage.getByText('Account details updated.').isVisible()) || profile.name !== 'Updated Member') accountErrors.push('Profile update did not complete.');
+  const accountOverflow = await accountPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  results.push({ viewport: 'account-mobile', sections: 1, expectedSections: 1, horizontalOverflow: accountOverflow, consoleErrors: accountErrors });
+  await accountPage.close();
+
   for (const path of ['login', 'register']) {
     for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'mobile', width: 390, height: 844 }]) {
       const authPage = await browser.newPage({ viewport });
