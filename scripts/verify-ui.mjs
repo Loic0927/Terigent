@@ -12,10 +12,15 @@ try {
     { id: '2', title: 'Second announcement', content: `Second content\n${'More content. '.repeat(35)}`, createdAt: '2026-09-11T02:00:00.000Z', updatedAt: '2026-09-11T02:00:00.000Z' },
     { id: '1', title: 'Oldest announcement', content: 'Oldest content', createdAt: '2026-09-11T01:00:00.000Z', updatedAt: '2026-09-11T01:00:00.000Z' },
   ];
+  const services = [
+    { id: '2', name: 'Team workflow design', description: 'Shape a clear operating rhythm for your team.', category: 'Consulting', pricingText: 'From $500', active: true },
+    { id: '1', name: 'Planning setup', description: 'Build a focused planning workspace.', category: 'Implementation', pricingText: null, active: true },
+  ];
   for (const viewport of [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile', width: 390, height: 844 }]) {
     const page = await browser.newPage({ viewport });
     const errors = [];
     await page.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
+    await page.route('**/api/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
     await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('pageerror', error => errors.push(error.message));
@@ -36,13 +41,16 @@ try {
       if (!(await page.locator('.nav-links').isVisible())) errors.push('Mobile navigation did not open.');
     }
     if (await page.locator('#task-board').count()) errors.push('Public homepage still contains the interactive task board.');
-    results.push({ viewport: viewport.name, sections, expectedSections: 5, horizontalOverflow, consoleErrors: errors });
+    if (await page.locator('.service-card').count() !== services.length) errors.push('Public service list was not rendered.');
+    results.push({ viewport: viewport.name, sections, expectedSections: 6, horizontalOverflow, consoleErrors: errors });
     await page.close();
   }
 
   const adminPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const adminErrors = [];
   await adminPage.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
+  await adminPage.route('**/api/admin/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
+  await adminPage.route('**/api/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
   await adminPage.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true }) }));
   adminPage.on('pageerror', error => adminErrors.push(error.message));
   await adminPage.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
@@ -50,8 +58,9 @@ try {
   if (await adminPage.locator('.announcement-card-heading a').count() !== announcements.length) adminErrors.push('Administrator edit links were missing.');
   await adminPage.locator('.announcement-popover-card').filter({ hasText: 'Second announcement' }).getByRole('link', { name: 'Edit' }).click();
   await adminPage.waitForURL('**/admin?edit=2');
-  await adminPage.locator('.admin-form input').waitFor();
-  if (await adminPage.locator('.admin-form input').inputValue() !== 'Second announcement') adminErrors.push('Deep link did not open the requested non-latest announcement.');
+  await adminPage.locator('.announcement-form input').waitFor();
+  if (await adminPage.locator('.announcement-form input').inputValue() !== 'Second announcement') adminErrors.push('Deep link did not open the requested non-latest announcement.');
+  if (await adminPage.locator('.admin-list').first().locator('article').count() !== services.length) adminErrors.push('Admin service list was not rendered.');
   results.push({ viewport: 'admin-deep-link', sections: 1, expectedSections: 1, horizontalOverflow: false, consoleErrors: adminErrors });
   await adminPage.close();
 

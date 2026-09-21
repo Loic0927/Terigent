@@ -7,6 +7,7 @@ import Benefits from './components/Benefits';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import Announcements from './components/Announcements';
+import Services from './components/Services';
 import Admin from './components/Admin';
 import { Account, AuthPage } from './components/MemberAuth';
 import MemberLayout from './components/MemberLayout';
@@ -23,6 +24,7 @@ export default function App() {
     <main>
       <Hero />
       <Features />
+      <Services />
       <HowItWorks />
       <Benefits />
       <Contact />

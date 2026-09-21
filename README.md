@@ -2,6 +2,15 @@
 
 Terigent is a responsive React/Vite project completed across four VOLTIX full-stack tasks, including database-backed member registration and authentication.
 
+## Task 6 - Company service management
+
+- Public, responsive service catalogue on the homepage, loaded from `GET /api/services`
+- Administrator service management integrated into `/admin`
+- Protected list/create/update/delete APIs under `/api/admin/services`
+- Active services are public; hidden and deleted services are excluded automatically
+- PostgreSQL-backed service name, description, category, optional pricing text, availability, and timestamps
+- Allow-listed, size-limited JSON validation, parameterized SQL, admin-session authorization, and same-origin mutation checks
+
 ## Task 4 - Member registration and authentication
 
 - `/register`, `/login`, protected `/dashboard`, and `/account` pages
@@ -48,7 +57,7 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
 - Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001`, `002`, `003`, then `db/migrations/004_create_user_tasks.sql`
+- Migrations: run `001` through `db/migrations/005_create_services.sql` in numeric order
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
@@ -79,6 +88,7 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/001_create_inquiries.
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/002_create_announcements_and_admin_login_attempts.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/003_create_users_and_user_sessions.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/004_create_user_tasks.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/005_create_services.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
@@ -111,7 +121,7 @@ To change the administrator username or password, generate a new hash, update `A
 
 No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
-Run migrations 002, 003, and 004 once against each environment's database, after migration 001. Migration 004 is non-destructive and creates only the member-owned task table.
+Run migrations 002 through 005 once against each environment's database, after migration 001. Migration 005 is non-destructive and creates only the company services table and its public-listing index.
 
 Neon SQL Editor alternative:
 
@@ -123,7 +133,7 @@ Neon SQL Editor alternative:
 ## Vercel deployment
 
 1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
-2. Run migrations 001 through 004 on a new Preview/Development database; run only 004 on an existing Task 4 database.
+2. Run migrations 001 through 005 on a new Preview/Development database; run only 005 on a database already current through Task 4.
 3. In Vercel: project → **Settings** → **Environment Variables**, preserve the five existing variables above. Task 4 adds none.
 4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
 5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all Task 2–4 behavior there.
