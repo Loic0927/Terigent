@@ -33,3 +33,15 @@ export function createAdminCustomerRequestItemHandler(repository) {
       if(!hasValidOrigin(req))return send(res,403,{error:'Request origin could not be verified.'}); if(!isJson(req))return send(res,415,{error:'Content-Type must be application/json.'}); const parsed=parseBody(req,1000);if(parsed.error)return send(res,parsed.error==='too_large'?413:400,{error:'Invalid request body.'}); const validation=validateStatusUpdate(parsed.body);if(!validation.valid)return send(res,400,{error:'Please correct the highlighted fields.',errors:validation.errors}); const item=await repository.updateCustomerRequestStatus(id,validation.data.status);return item?send(res,200,{request:item}):send(res,404,{error:'Customer request not found.'});
     } catch(error){console.error('Customer request operation failed:',error instanceof Error?error.message:'Unknown error');return send(res,500,{error:'The customer request could not be processed right now.'});} };
 }
+
+export function createCustomerRequestsGateway(repository, rateLimit) {
+  const publicHandler = createPublicCustomerRequestHandler(repository, rateLimit);
+  const adminListHandler = createAdminCustomerRequestsHandler(repository);
+  const adminItemHandler = createAdminCustomerRequestItemHandler(repository);
+  return function customerRequestsGateway(req, res) {
+    const route = Array.isArray(req.query?.requestRoute) ? req.query.requestRoute[0] : req.query?.requestRoute;
+    if (route === 'admin-list') return adminListHandler(req, res);
+    if (route === 'admin-item') return adminItemHandler(req, res);
+    return publicHandler(req, res);
+  };
+}

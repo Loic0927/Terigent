@@ -1,3 +1,3 @@
-import { createPublicCustomerRequestHandler } from '../server/customer-request-handler.js';
+import { createCustomerRequestsGateway } from '../server/customer-request-handler.js';
 import * as repository from '../server/customer-request-repository.js';
-export default createPublicCustomerRequestHandler(repository);
+export default createCustomerRequestsGateway(repository);

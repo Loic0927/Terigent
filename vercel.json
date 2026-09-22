@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/api/admin/customer-requests", "destination": "/api/customer-requests?requestRoute=admin-list" },
+    { "source": "/api/admin/customer-requests/:id", "destination": "/api/customer-requests?requestRoute=admin-item&id=:id" },
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/admin/", "destination": "/index.html" },
     { "source": "/register", "destination": "/index.html" },
