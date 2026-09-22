@@ -1,22 +1,6 @@
 # Terigent
 
-Terigent is a responsive React/Vite project completed across four VOLTIX full-stack tasks, including database-backed member registration and authentication.
-
-## Task 6 - Company service management
-
-- Public, responsive service catalogue on the homepage, loaded from `GET /api/services`
-- Administrator service management integrated into `/admin`
-- Protected list/create/update/delete APIs under `/api/admin/services`
-- Active services are public; hidden and deleted services are excluded automatically
-- PostgreSQL-backed service name, description, category, optional pricing text, availability, and timestamps
-- Allow-listed, size-limited JSON validation, parameterized SQL, admin-session authorization, and same-origin mutation checks
-
-## Task 4 - Member registration and authentication
-
-- `/register`, `/login`, protected `/dashboard`, and `/account` pages
-- Member APIs at `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, and `/api/auth/me`
-- Server validation, normalized case-insensitive email uniqueness, salted scrypt password hashes, opaque seven-day sessions, trusted-origin CSRF checks, and PostgreSQL-backed throttling
-- Member cookie `terigent_user_session` and database sessions are fully separate from the Task 3 administrator cookie and `/api/admin/auth/*`; members cannot authorize announcement writes
+Terigent is a responsive React/Vite full-stack project with database-backed member authentication and customer request management.
 
 ## Task 1 - Responsive task-management interface
 
@@ -52,12 +36,36 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - PostgreSQL-backed login throttling: five failed attempts per hashed IP-and-username key in 15 minutes
 - Parameterized PostgreSQL queries, server-side validation, safe errors, and plain-text React rendering
 
+## Task 4 - Member registration and authentication
+
+- `/register`, `/login`, protected `/dashboard`, and `/account` pages
+- Member APIs at `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, and `/api/auth/me`
+- Server validation, normalized case-insensitive email uniqueness, salted scrypt password hashes, opaque seven-day sessions, trusted-origin CSRF checks, and PostgreSQL-backed throttling
+- Member cookie `terigent_user_session` and database sessions are fully separate from the Task 3 administrator cookie and `/api/admin/auth/*`; members cannot authorize announcement writes
+
+## Task 6 - Company service management
+
+- Public, responsive service catalogue on the homepage, loaded from `GET /api/services`
+- Administrator service management integrated into `/admin`
+- Protected list/create/update/delete APIs under `/api/admin/services`
+- Active services are public; hidden and deleted services are excluded automatically
+- PostgreSQL-backed service name, description, category, optional pricing text, availability, and timestamps
+- Allow-listed, size-limited JSON validation, parameterized SQL, admin-session authorization, and same-origin mutation checks
+
+## Task 7 - Customer request management
+
+- Public service-request form with client/server validation, honeypot, size limits, and rate limiting
+- Optional association to an authenticated member; anonymous requests remain supported
+- PostgreSQL-backed requests with New, In Progress, Resolved, and Closed states
+- Administrator-only paginated/filterable list, detail view, and status updates under `/admin`
+- Parameterized SQL, server-side authorization, allow-listed updates, and same-origin mutation protection
+
 ## Shared architecture and database
 
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
 - Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001` through `db/migrations/005_create_services.sql` in numeric order
+- Migrations: run `001` through `db/migrations/006_create_customer_requests.sql` in numeric order
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
@@ -89,6 +97,7 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/002_create_announceme
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/003_create_users_and_user_sessions.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/004_create_user_tasks.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/005_create_services.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/006_create_customer_requests.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
@@ -121,7 +130,7 @@ To change the administrator username or password, generate a new hash, update `A
 
 No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
-Run migrations 002 through 005 once against each environment's database, after migration 001. Migration 005 is non-destructive and creates only the company services table and its public-listing index.
+Run migrations 002 through 006 once against each environment's database, after migration 001. Migrations 005 and 006 are non-destructive and create the company services and customer request tables plus their indexes.
 
 Neon SQL Editor alternative:
 
@@ -133,11 +142,11 @@ Neon SQL Editor alternative:
 ## Vercel deployment
 
 1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
-2. Run migrations 001 through 005 on a new Preview/Development database; run only 005 on a database already current through Task 4.
+2. Run migrations 001 through 006 on a new Preview/Development database; run migrations 005 and 006 on a database already current through Task 4, or only 006 if it is already current through Task 6.
 3. In Vercel: project → **Settings** → **Environment Variables**, preserve the five existing variables above. Task 4 adds none.
 4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
-5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all Task 2–4 behavior there.
-6. After Preview passes, ensure migration 004 has run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
+5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all implemented tasks documented above.
+6. After Preview passes, ensure migrations 001 through 006 have run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
 
 Environment-variable changes affect only new deployments, so adding or rotating any of these values requires redeployment. Database migration alone does not require redeployment, but deploy only after its target schema is ready.
 
@@ -152,12 +161,14 @@ Use the Preview URL first, then repeat on the production URL without destructive
 5. Open `/` in another tab, reload, and confirm the same announcement appears newest first.
 6. Edit it in `/admin`, reload the public page, and confirm content and updated time change.
 7. Delete it after the confirmation dialog and confirm it disappears publicly.
-8. Submit the existing contact form and confirm its normal success response; verify the `inquiries` table if this is a non-production environment.
+8. Submit the customer request form as a guest and confirm a `New` record appears in `customer_requests` in a non-production environment.
 9. Sign out, reload `/admin`, and confirm editing controls require login again.
 10. Open `/register`, create a unique member account, and confirm the success message appears on `/login`.
 11. Sign in, confirm `/account` shows the correct name, email, and creation time, then refresh to verify the session persists.
 12. Sign out and confirm `/account` redirects to `/login`. Re-send the old cookie only in a safe test environment and confirm `/api/auth/me` returns `401`.
-13. While signed in only as a member, attempt announcement `POST`, `PATCH`, and `DELETE`; each must return `401`, while public announcements and Contact remain available.
+13. While signed in only as a member, attempt announcement `POST`, `PATCH`, and `DELETE`; each must return `401`, while public announcements and customer request submission remain available.
+14. Submit another customer request while signed in as a member and confirm it is associated with that member.
+15. Sign in at `/admin`, filter customer requests, open the details, and update the request through all supported statuses.
 
 The UI prevents blank/overlong input. Automated handler tests also cover blank values, 101-character titles, invalid IDs, missing rows, unauthorized writes, cross-origin writes, and logout.
 

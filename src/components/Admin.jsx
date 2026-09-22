@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { HiOutlineArrowLeft, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2';
+import { HiOutlineArrowLeft, HiOutlineEye, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2';
 import Logo from './Logo';
 
 const EMPTY_ANNOUNCEMENT = { title: '', content: '' };
 const EMPTY_SERVICE = { name: '', description: '', category: '', pricingText: '', active: true };
 const LIMITS = { title: 100, content: 5000, name: 120, description: 2000, category: 80, pricingText: 120 };
 const cleanState = { sending: false, errors: {}, notice: '', success: false };
+const REQUEST_STATUSES = ['New', 'In Progress', 'Resolved', 'Closed'];
 
 async function api(url, options) {
   const response = await fetch(url, options);
@@ -31,6 +32,10 @@ export default function Admin() {
   const [loginState, setLoginState] = useState({ sending: false, error: '' });
   const [announcements, setAnnouncements] = useState([]);
   const [services, setServices] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [requestFilter, setRequestFilter] = useState('');
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [requestState, setRequestState] = useState({ state: 'loading', notice: '' });
   const [listState, setListState] = useState({ announcements: 'loading', services: 'loading' });
   const [announcementForm, setAnnouncementForm] = useState(EMPTY_ANNOUNCEMENT);
   const [serviceForm, setServiceForm] = useState(EMPTY_SERVICE);
@@ -54,11 +59,16 @@ export default function Admin() {
       else setAnnouncementState({ ...cleanState, notice: /^[1-9]\d*$/.test(requestedId) ? 'The requested announcement was not found. It may have been deleted.' : 'The requested announcement ID is invalid.' });
     }
   }, []);
-  useEffect(() => { api('/api/admin/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) load(); }).catch(() => setAuth('anonymous')); }, [load]);
+  const loadRequests = useCallback(async (status = '') => {
+    setRequestState({ state: 'loading', notice: '' });
+    try { const payload = await api(`/api/admin/customer-requests?limit=50${status ? `&status=${encodeURIComponent(status)}` : ''}`); setRequests(payload.requests || []); setRequestState({ state: 'ready', notice: '' }); }
+    catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState({ state: 'error', notice: error.message }); }
+  }, []);
+  useEffect(() => { api('/api/admin/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) { load(); loadRequests(); } }).catch(() => setAuth('anonymous')); }, [load, loadRequests]);
 
   const submitLogin = async event => {
     event.preventDefault(); setLoginState({ sending: true, error: '' });
-    try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); setAuth('authenticated'); await load(); setLoginState({ sending: false, error: '' }); }
+    try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); setAuth('authenticated'); await Promise.all([load(), loadRequests()]); setLoginState({ sending: false, error: '' }); }
     catch (error) { setLoginState({ sending: false, error: error.message }); }
   };
   const logout = async () => { try { await api('/api/admin/auth/logout', { method: 'POST' }); } finally { setAuth('anonymous'); setAnnouncements([]); setServices([]); } };
@@ -90,6 +100,8 @@ export default function Admin() {
       await load();
     } catch (error) { if (error.status === 401) setAuth('anonymous'); else window.alert(error.message); }
   };
+  const openRequest = async item => { setRequestState(current => ({ ...current, notice: '' })); try { const payload = await api(`/api/admin/customer-requests/${item.id}`); setSelectedRequest(payload.request); } catch (error) { setRequestState({ state: 'error', notice: error.message }); } };
+  const changeRequestStatus = async status => { if (!selectedRequest) return; setRequestState(current => ({ ...current, notice: 'Updating status...' })); try { const payload = await api(`/api/admin/customer-requests/${selectedRequest.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); setSelectedRequest(payload.request); await loadRequests(requestFilter); setRequestState({ state: 'ready', notice: 'Status updated successfully.' }); } catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState(current => ({ ...current, notice: error.message })); } };
 
   if (auth === 'checking') return <main className="admin-shell"><p role="status">Checking administrator session...</p></main>;
   if (auth === 'anonymous') return <main className="admin-shell"><div className="admin-login"><Logo /><a href="/#services" className="admin-back"><HiOutlineArrowLeft /> Back to website</a><h1>Administrator sign in</h1><p>Sign in to manage company services and announcements.</p><form onSubmit={submitLogin}>
@@ -100,7 +112,12 @@ export default function Admin() {
   const editAnnouncement = item => { setEditingAnnouncement(item.id); setAnnouncementForm({ title: item.title, content: item.content }); setAnnouncementState(cleanState); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const editService = item => { setEditingService(item.id); setServiceForm({ name: item.name, description: item.description, category: item.category, pricingText: item.pricingText || '', active: item.active }); setServiceState(cleanState); document.querySelector('#service-editor')?.scrollIntoView({ behavior: 'smooth' }); };
 
-  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Content management</h1></div><div><a className="button button-ghost button-small" href="/#services"><HiOutlineArrowLeft /> Back to website</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
+  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Company management</h1></div><div><a className="button button-ghost button-small" href="/#services"><HiOutlineArrowLeft /> Back to website</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
+    <section className="admin-panel" id="customer-requests"><div className="request-panel-heading"><div><h2>Customer requests</h2><p>Review incoming service requests and update their progress.</p></div><label>Status <select value={requestFilter} onChange={event => { setRequestFilter(event.target.value); setSelectedRequest(null); loadRequests(event.target.value); }}><option value="">All statuses</option>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label></div>
+      {requestState.state === 'loading' && <p role="status">Loading customer requests...</p>}{requestState.state === 'error' && <p className="admin-notice error" role="alert">{requestState.notice} <button onClick={() => loadRequests(requestFilter)}>Try again</button></p>}{requestState.state === 'ready' && !requests.length && <p>No customer requests match this filter.</p>}
+      <div className="request-list">{requests.map(item => <button type="button" key={item.id} className={selectedRequest?.id === item.id ? 'selected' : ''} onClick={() => openRequest(item)}><span><strong>{item.subject}</strong><small>{item.fullName} · {new Date(item.createdAt).toLocaleString()}</small></span><span className={`request-status status-${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span><HiOutlineEye /></button>)}</div>
+      {selectedRequest && <article className="request-detail"><div className="request-detail-heading"><div><small>Request #{selectedRequest.id}</small><h3>{selectedRequest.subject}</h3></div><label>Status <select value={selectedRequest.status} onChange={event => changeRequestStatus(event.target.value)}>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label></div><dl><div><dt>Customer</dt><dd>{selectedRequest.fullName}</dd></div><div><dt>Email</dt><dd><a href={`mailto:${selectedRequest.email}`}>{selectedRequest.email}</a></dd></div><div><dt>Submitted</dt><dd>{new Date(selectedRequest.createdAt).toLocaleString()}</dd></div></dl><p>{selectedRequest.details}</p>{requestState.notice && <p className={`admin-notice ${requestState.notice.includes('success') ? 'success' : ''}`} role="status">{requestState.notice}</p>}</article>}
+    </section>
     <section className="admin-panel" id="service-editor"><h2>{editingService ? 'Edit service' : 'New service'}</h2><form className="admin-form service-form" onSubmit={submitService} noValidate>
       <label>Name <span>{serviceForm.name.length}/{LIMITS.name}</span><input value={serviceForm.name} maxLength={LIMITS.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} aria-invalid={Boolean(serviceState.errors.name)} />{serviceState.errors.name && <small>{serviceState.errors.name}</small>}</label>
       <label>Category <span>{serviceForm.category.length}/{LIMITS.category}</span><input value={serviceForm.category} maxLength={LIMITS.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })} aria-invalid={Boolean(serviceState.errors.category)} />{serviceState.errors.category && <small>{serviceState.errors.category}</small>}</label>
