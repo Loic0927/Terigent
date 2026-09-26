@@ -1,6 +1,6 @@
 import { hasValidOrigin, isAdmin } from './auth.js';
 import { parseBody, send } from './http.js';
-import { validateService } from './service-validation.js';
+import { validatePublicServiceQuery, validateService } from './service-validation.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 const isJson = req => String(req.headers?.['content-type'] || '').toLowerCase().split(';')[0].trim() === 'application/json';
@@ -25,7 +25,16 @@ export function createPublicServicesHandler(repository) {
   return async function publicServicesHandler(req, res) {
     if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return send(res, 405, { error: 'Method not allowed.' }); }
     res.setHeader('Cache-Control', 'no-store');
-    try { return send(res, 200, { services: await repository.listPublicServices() }); }
+    const validation = validatePublicServiceQuery(req.query);
+    if (!validation.valid) return send(res, 400, { error: 'Invalid search parameters.', errors: validation.errors });
+    try {
+      const result = await repository.listPublicServices(validation.data);
+      return send(res, 200, {
+        services: result.services,
+        filters: { categories: result.categories },
+        pagination: { page: validation.data.page, limit: validation.data.limit, total: result.total, totalPages: Math.ceil(result.total / validation.data.limit) },
+      });
+    }
     catch (error) {
       console.error('Public service list failed:', error instanceof Error ? error.message : 'Unknown error');
       return send(res, 500, { error: 'Services could not be loaded right now.' });

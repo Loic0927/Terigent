@@ -2,6 +2,7 @@ import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 
 const server = await preview({ preview: { host: '127.0.0.1', port: 4173 } });
+const baseUrl = server.resolvedUrls.local[0].replace(/\/$/, '');
 
 try {
   const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
@@ -13,18 +14,18 @@ try {
     { id: '1', title: 'Oldest announcement', content: 'Oldest content', createdAt: '2026-09-11T01:00:00.000Z', updatedAt: '2026-09-11T01:00:00.000Z' },
   ];
   const services = [
-    { id: '2', name: 'Team workflow design', description: 'Shape a clear operating rhythm for your team.', category: 'Consulting', pricingText: 'From $500', active: true },
-    { id: '1', name: 'Planning setup', description: 'Build a focused planning workspace.', category: 'Implementation', pricingText: null, active: true },
+    { id: '2', name: 'Team workflow design', description: 'Shape a clear operating rhythm for your team.', category: 'Consulting', pricingText: 'From $500', active: true, updatedAt: '2026-09-20T00:00:00.000Z', matches: [] },
+    { id: '1', name: 'Planning setup', description: 'Build a focused planning workspace.', category: 'Implementation', pricingText: null, active: true, updatedAt: '2026-09-19T00:00:00.000Z', matches: [] },
   ];
   for (const viewport of [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile', width: 390, height: 844 }]) {
     const page = await browser.newPage({ viewport });
     const errors = [];
     await page.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
-    await page.route('**/api/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
+    await page.route('**/api/services?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services, filters: { categories: ['Consulting', 'Implementation'] }, pagination: { page: 1, limit: 24, total: 2, totalPages: 1 } }) }));
     await page.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: null }) }));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+    await page.goto(baseUrl, { waitUntil: 'networkidle' });
     await page.locator('.announcement-pin-trigger').click();
     if (await page.locator('.announcement-popover-card').count() !== announcements.length) errors.push('Announcement list was truncated.');
     if (await page.locator('.announcement-card-heading a').count() !== 0) errors.push('Visitor saw administrator edit controls.');
@@ -42,6 +43,7 @@ try {
     }
     if (await page.locator('#task-board').count()) errors.push('Public homepage still contains the interactive task board.');
     if (await page.locator('.service-card').count() !== services.length) errors.push('Public service list was not rendered.');
+    if (!(await page.locator('.service-search').isVisible())) errors.push('Public service search controls were not rendered.');
     results.push({ viewport: viewport.name, sections, expectedSections: 6, horizontalOverflow, consoleErrors: errors });
     await page.close();
   }
@@ -53,7 +55,7 @@ try {
   await adminPage.route('**/api/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
   await adminPage.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true }) }));
   adminPage.on('pageerror', error => adminErrors.push(error.message));
-  await adminPage.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await adminPage.goto(baseUrl, { waitUntil: 'networkidle' });
   await adminPage.locator('.announcement-pin-trigger').click();
   if (await adminPage.locator('.announcement-card-heading a').count() !== announcements.length) adminErrors.push('Administrator edit links were missing.');
   await adminPage.locator('.announcement-popover-card').filter({ hasText: 'Second announcement' }).getByRole('link', { name: 'Edit' }).click();
@@ -69,7 +71,7 @@ try {
   await dashboardPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'Test Member', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
   await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
   dashboardPage.on('pageerror', error => dashboardErrors.push(error.message));
-  await dashboardPage.goto('http://127.0.0.1:4173/dashboard', { waitUntil: 'networkidle' });
+  await dashboardPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await dashboardPage.reload({ waitUntil: 'networkidle' });
   if (!(await dashboardPage.getByText('Welcome,').isVisible())) dashboardErrors.push('Dashboard did not render after direct load and refresh.');
   await dashboardPage.locator('.member-menu-button').click();
@@ -82,7 +84,7 @@ try {
   const signedOutErrors = [];
   await signedOutDashboard.route('**/api/auth/me', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign-in is required.' }) }));
   signedOutDashboard.on('pageerror', error => signedOutErrors.push(error.message));
-  await signedOutDashboard.goto('http://127.0.0.1:4173/dashboard', { waitUntil: 'networkidle' });
+  await signedOutDashboard.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await signedOutDashboard.waitForURL('**/login?returnTo=%2Fdashboard');
   if (!signedOutDashboard.url().endsWith('/login?returnTo=%2Fdashboard')) signedOutErrors.push('Signed-out dashboard visitor was not redirected to login.');
   results.push({ viewport: 'dashboard-signed-out', sections: 1, expectedSections: 1, horizontalOverflow: false, consoleErrors: signedOutErrors });
@@ -100,7 +102,7 @@ try {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: profile }) });
   });
   accountPage.on('pageerror', error => accountErrors.push(error.message));
-  await accountPage.goto('http://127.0.0.1:4173/account', { waitUntil: 'networkidle' });
+  await accountPage.goto(`${baseUrl}/account`, { waitUntil: 'networkidle' });
   if (!(await accountPage.locator('#account-email').evaluate(element => element.readOnly))) accountErrors.push('Account email is not read-only.');
   await accountPage.locator('#account-name').fill('Updated Member');
   await accountPage.getByRole('button', { name: 'Save changes' }).click();
@@ -115,7 +117,7 @@ try {
       const authErrors = [];
       await authPage.route('**/api/auth/me', route => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Sign-in is required.' }) }));
       authPage.on('pageerror', error => authErrors.push(error.message));
-      await authPage.goto(`http://127.0.0.1:4173/${path}`, { waitUntil: 'networkidle' });
+      await authPage.goto(`${baseUrl}/${path}`, { waitUntil: 'networkidle' });
       const top = authPage.locator('.auth-card-top');
       if (!(await top.locator('.logo').isVisible()) || !(await top.locator('.auth-home').isVisible())) authErrors.push('Auth card top row is incomplete.');
       if (await top.locator('.auth-home').getAttribute('href') !== '/') authErrors.push('Back to home link is incorrect.');
