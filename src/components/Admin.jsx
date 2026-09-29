@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HiOutlineArrowLeft, HiOutlineEye, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2';
 import Logo from './Logo';
 
@@ -48,6 +48,9 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [userState, setUserState] = useState({ state: 'idle', notice: '' });
+  const [signingOut, setSigningOut] = useState(false);
+  const announcementEditorRef = useRef(null);
+  const announcementTitleRef = useRef(null);
 
   const can = permission => permissions.includes(permission);
 
@@ -81,13 +84,18 @@ export default function Admin() {
     setRole(result.role); setPermissions(result.permissions || []); setAuth('authenticated'); load();
     if (result.role === 'root') { loadRequests(); loadUsers(); }
   }).catch(error => setAuth(error.status === 403 ? 'forbidden' : 'anonymous')); }, [load, loadRequests, loadUsers]);
+  useEffect(() => {
+    if (!editingAnnouncement) return;
+    announcementEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announcementTitleRef.current?.focus({ preventScroll: true });
+  }, [editingAnnouncement]);
 
   const submitLogin = async event => {
     event.preventDefault(); setLoginState({ sending: true, error: '' });
     try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); const session = await api('/api/admin/auth/session'); setRole(session.role); setPermissions(session.permissions || []); setAuth('authenticated'); await Promise.all([load(), loadRequests(), loadUsers()]); setLoginState({ sending: false, error: '' }); }
     catch (error) { setLoginState({ sending: false, error: error.message }); }
   };
-  const logout = async () => { try { await Promise.allSettled([api('/api/admin/auth/logout', { method: 'POST' }), api('/api/auth/logout', { method: 'POST' })]); } finally { setAuth('anonymous'); setRole(null); setPermissions([]); setAnnouncements([]); setServices([]); setUsers([]); } };
+  const logout = async () => { if (signingOut) return; setSigningOut(true); try { await Promise.allSettled([api('/api/admin/auth/logout', { method: 'POST' }), api('/api/auth/logout', { method: 'POST' })]); window.location.replace('/'); } catch { setSigningOut(false); } };
 
   const changeUser = async (user, action) => {
     const description = action === 'delete' ? `delete ${user.name} (${user.email})` : `${action === 'staff' ? 'grant staff access to' : 'revoke staff access from'} ${user.name}`;
@@ -136,10 +144,10 @@ export default function Admin() {
     {loginState.error && <p className="admin-notice error" role="alert">{loginState.error}</p>}<button className="button" disabled={loginState.sending}>{loginState.sending ? 'Signing in...' : 'Sign in'}</button>
   </form></div></main>;
 
-  const editAnnouncement = item => { setEditingAnnouncement(item.id); setAnnouncementForm({ title: item.title, content: item.content }); setAnnouncementState(cleanState); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const editAnnouncement = item => { setEditingAnnouncement(item.id); setAnnouncementForm({ title: item.title, content: item.content }); setAnnouncementState(cleanState); };
   const editService = item => { setEditingService(item.id); setServiceForm({ name: item.name, description: item.description, category: item.category, pricingText: item.pricingText || '', active: item.active }); setServiceState(cleanState); document.querySelector('#service-editor')?.scrollIntoView({ behavior: 'smooth' }); };
 
-  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Company management</h1><p>Signed in as <strong>{role}</strong></p></div><div><a className="button button-ghost button-small" href="/#services"><HiOutlineArrowLeft /> Back to website</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
+  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div className="admin-heading"><Logo href="/" /><h1>Company management</h1><p>Signed in as <strong>{role}</strong></p></div></header>
     {role === 'root' && <><section className="admin-panel" id="user-management"><h2>Staff / User Management</h2><form className="admin-user-search" onSubmit={event => { event.preventDefault(); loadUsers(userSearch); }}><input aria-label="Search users by name or email" value={userSearch} maxLength="100" placeholder="Search name or email" onChange={event => setUserSearch(event.target.value)} /><button className="button button-small">Search</button></form>
       {userState.state === 'loading' && <p role="status">Loading users...</p>}{userState.notice && <p className={`admin-notice ${userState.state === 'error' ? 'error' : 'success'}`} role="status">{userState.notice}</p>}{userState.state === 'ready' && !users.length && <p>No users match this search.</p>}
       <div className="admin-list user-list">{users.map(user => <article key={user.id}><div><h3>{user.name}</h3><p>{user.email}</p><small>{user.role} · Joined {new Date(user.createdAt).toLocaleString()}</small></div><div>{user.role === 'user' && <button className="button button-small" onClick={() => changeUser(user, 'staff')}>Grant staff</button>}{user.role === 'staff' && <button className="button button-ghost button-small" onClick={() => changeUser(user, 'user')}>Revoke staff</button>}{user.role !== 'root' && <button className="button button-danger button-small" onClick={() => changeUser(user, 'delete')}><HiOutlineTrash /> Delete</button>}</div></article>)}</div>
@@ -159,13 +167,14 @@ export default function Admin() {
     <section className="admin-panel"><h2>Company services</h2>{listState.services === 'loading' && <p role="status">Loading services...</p>}{listState.services === 'error' && <p className="admin-notice error">Services could not be loaded. <button onClick={load}>Try again</button></p>}{listState.services === 'ready' && !services.length && <p>No services yet.</p>}
       <div className="admin-list">{services.map(item => <article key={item.id}><div><div className="admin-item-heading"><h3>{item.name}</h3><span className={item.active ? 'status-active' : 'status-inactive'}>{item.active ? 'Public' : 'Hidden'}</span></div><small>{item.category}{item.pricingText ? ` · ${item.pricingText}` : ''}</small><p>{item.description}</p></div>{(can('services:update') || can('services:delete')) && <div>{can('services:update') && <button className="button button-ghost button-small" onClick={() => editService(item)}><HiOutlinePencilSquare /> Edit</button>}{can('services:delete') && <button className="button button-danger button-small" onClick={() => remove('service', item)}><HiOutlineTrash /> Delete</button>}</div>}</article>)}</div>
     </section>
-    <section className="admin-panel"><h2>{editingAnnouncement ? 'Edit announcement' : 'New announcement'}</h2><form className="admin-form announcement-form" onSubmit={submitAnnouncement} noValidate>
-      <label>Title <span>{announcementForm.title.length}/{LIMITS.title}</span><input value={announcementForm.title} maxLength={LIMITS.title} onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })} aria-invalid={Boolean(announcementState.errors.title)} />{announcementState.errors.title && <small>{announcementState.errors.title}</small>}</label>
+    <section className="admin-panel" ref={announcementEditorRef}><h2>{editingAnnouncement ? 'Edit announcement' : 'New announcement'}</h2><form className="admin-form announcement-form" onSubmit={submitAnnouncement} noValidate>
+      <label>Title <span>{announcementForm.title.length}/{LIMITS.title}</span><input ref={announcementTitleRef} value={announcementForm.title} maxLength={LIMITS.title} onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })} aria-invalid={Boolean(announcementState.errors.title)} />{announcementState.errors.title && <small>{announcementState.errors.title}</small>}</label>
       <label>Content <span>{announcementForm.content.length}/{LIMITS.content}</span><textarea rows="7" value={announcementForm.content} maxLength={LIMITS.content} onChange={e => setAnnouncementForm({ ...announcementForm, content: e.target.value })} aria-invalid={Boolean(announcementState.errors.content)} />{announcementState.errors.content && <small>{announcementState.errors.content}</small>}</label>
       {announcementState.notice && <p className={`admin-notice ${announcementState.success ? 'success' : 'error'}`} role="status">{announcementState.notice}</p>}<div className="admin-form-actions">{editingAnnouncement && <button type="button" className="button button-ghost" onClick={() => { setEditingAnnouncement(null); setAnnouncementForm(EMPTY_ANNOUNCEMENT); setAnnouncementState(cleanState); }} disabled={announcementState.sending}>Cancel</button>}<button className="button" disabled={announcementState.sending}><HiOutlinePlus /> {announcementState.sending ? 'Saving...' : editingAnnouncement ? 'Save changes' : 'Publish announcement'}</button></div>
     </form></section>
     <section className="admin-panel"><h2>Existing announcements</h2>{listState.announcements === 'loading' && <p role="status">Loading announcements...</p>}{listState.announcements === 'error' && <p className="admin-notice error">Announcements could not be loaded. <button onClick={load}>Try again</button></p>}{listState.announcements === 'ready' && !announcements.length && <p>No announcements yet.</p>}
       <div className="admin-list">{announcements.map(item => <article key={item.id}><div><h3>{item.title}</h3><p>{item.content}</p></div>{(can('announcements:update') || can('announcements:delete')) && <div>{can('announcements:update') && <button className="button button-ghost button-small" onClick={() => editAnnouncement(item)}><HiOutlinePencilSquare /> Edit</button>}{can('announcements:delete') && <button className="button button-danger button-small" onClick={() => remove('announcement', item)}><HiOutlineTrash /> Delete</button>}</div>}</article>)}</div>
     </section>
+    <div className="admin-footer-actions"><button className="button button-small" onClick={logout} disabled={signingOut}>{signingOut ? 'Signing out...' : 'Sign out'}</button></div>
   </div></main>;
 }

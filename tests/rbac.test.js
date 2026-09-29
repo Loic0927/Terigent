@@ -21,22 +21,24 @@ test('RBAC permission matrix grants only the specified capabilities', () => {
   assert.equal(hasPermission({ role: 'staff' }, 'announcements:create'), true);
   assert.equal(hasPermission({ role: 'staff' }, 'services:update'), true);
   assert.equal(hasPermission({ role: 'staff' }, 'announcements:update'), true);
-  assert.equal(hasPermission({ role: 'staff' }, 'services:delete'), false);
-  assert.equal(hasPermission({ role: 'staff' }, 'announcements:delete'), false);
+  assert.equal(hasPermission({ role: 'staff' }, 'services:delete'), true);
+  assert.equal(hasPermission({ role: 'staff' }, 'announcements:delete'), true);
   assert.deepEqual(permissionsFor('user'), []);
 });
 
-test('user is forbidden and staff can create and update but cannot delete services and announcements', async () => {
-  const serviceRepo = { createService: async data => ({ id: '1', ...data }), updateService: async (id, data) => ({ id, ...data }), deleteService: async () => assert.fail() };
-  const announcementRepo = { createAnnouncement: async data => ({ id: '1', ...data }), updateAnnouncement: async (id, data) => ({ id, ...data }), deleteAnnouncement: async () => assert.fail() };
+test('staff has full service and announcement CRUD while user remains forbidden', async () => {
+  const serviceRepo = { createService: async data => ({ id: '1', ...data }), updateService: async (id, data) => ({ id, ...data }), deleteService: async id => ({ id }) };
+  const announcementRepo = { createAnnouncement: async data => ({ id: '1', ...data }), updateAnnouncement: async (id, data) => ({ id, ...data }), deleteAnnouncement: async id => ({ id }) };
   assert.equal((await call(createAdminServicesHandler(serviceRepo, authorization('user')), 'POST', service)).statusCode, 403);
   assert.equal((await call(createAnnouncementsHandler(announcementRepo, authorization('user')), 'POST', announcement)).statusCode, 403);
   assert.equal((await call(createAdminServicesHandler(serviceRepo, authorization('staff')), 'POST', service)).statusCode, 201);
   assert.equal((await call(createAnnouncementsHandler(announcementRepo, authorization('staff')), 'POST', announcement)).statusCode, 201);
   assert.equal((await call(createAdminServiceItemHandler(serviceRepo, authorization('staff')), 'PATCH', service, { id: '1' })).statusCode, 200);
-  assert.equal((await call(createAdminServiceItemHandler(serviceRepo, authorization('staff')), 'DELETE', undefined, { id: '1' })).statusCode, 403);
+  assert.equal((await call(createAdminServiceItemHandler(serviceRepo, authorization('staff')), 'DELETE', undefined, { id: '1' })).statusCode, 200);
   assert.equal((await call(createAnnouncementItemHandler(announcementRepo, authorization('staff')), 'PATCH', announcement, { id: '1' })).statusCode, 200);
-  assert.equal((await call(createAnnouncementItemHandler(announcementRepo, authorization('staff')), 'DELETE', undefined, { id: '1' })).statusCode, 403);
+  assert.equal((await call(createAnnouncementItemHandler(announcementRepo, authorization('staff')), 'DELETE', undefined, { id: '1' })).statusCode, 200);
+  assert.equal((await call(createAdminServiceItemHandler(serviceRepo, authorization('user')), 'DELETE', undefined, { id: '1' })).statusCode, 403);
+  assert.equal((await call(createAnnouncementItemHandler(announcementRepo, authorization('user')), 'DELETE', undefined, { id: '1' })).statusCode, 403);
 });
 
 test('staff cannot view customer requests', async () => {

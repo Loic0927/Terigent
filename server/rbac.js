@@ -9,7 +9,7 @@ export const PERMISSIONS = Object.freeze({
     'announcements:view', 'announcements:create', 'announcements:update', 'announcements:delete',
     'users:view', 'users:assign-role', 'users:delete', 'customer-requests:manage',
   ]),
-  STAFF: Object.freeze(['services:view', 'services:create', 'services:update', 'announcements:view', 'announcements:create', 'announcements:update']),
+  STAFF: Object.freeze(['services:view', 'services:create', 'services:update', 'services:delete', 'announcements:view', 'announcements:create', 'announcements:update', 'announcements:delete']),
   USER: Object.freeze([]),
 });
 
