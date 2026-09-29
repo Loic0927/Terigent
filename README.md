@@ -1,6 +1,6 @@
 # Terigent
 
-Terigent is a responsive React/Vite full-stack project with database-backed member authentication and customer request management.
+Terigent is a responsive React/Vite full-stack project with database-backed member authentication, customer task management, service requests, and role-based administration.
 
 ## Task 1 - Responsive task-management interface
 
@@ -43,6 +43,17 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - Server validation, normalized case-insensitive email uniqueness, salted scrypt password hashes, opaque seven-day sessions, trusted-origin CSRF checks, and PostgreSQL-backed throttling
 - Member cookie `terigent_user_session` and database sessions are fully separate from the Task 3 administrator cookie and `/api/admin/auth/*`; members cannot authorize announcement writes
 
+## Task 5 - Customer dashboard and account
+
+- Protected Customer Dashboard and My Account pages sharing a responsive member header
+- Server-side session lookup for every private request; browser-supplied user IDs are never trusted
+- Database-backed task list, creation, editing, status transitions, reopening, and deletion
+- Task ownership enforced in parameterized SQL so members can access only their own records
+- Allow-listed Not Started, In Progress, and Completed states with validated task metadata
+- Same-origin CSRF checks on every task or profile mutation
+- Safe account-name editing while email, password hashes, and session data remain protected
+- Desktop, tablet, and mobile navigation with long-name handling and no horizontal overflow
+
 ## Task 6 - Company service management
 
 - Public, responsive service catalogue on the homepage, loaded from `GET /api/services`
@@ -60,12 +71,33 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - Administrator-only paginated/filterable list, detail view, and status updates under `/admin`
 - Parameterized SQL, server-side authorization, allow-listed updates, and same-origin mutation protection
 
+## Task 8 - Public service discovery
+
+- Server-backed keyword and category filtering for the public service catalogue
+- Updated-time sorting, pagination, empty states, and responsive search controls
+- Parameterized search queries that keep inactive services private
+- Combined API routing that remains within the Vercel Hobby Functions limit
+
+## Task 9 - Role-based access control
+
+- Centralized `root`, `staff`, and `user` authorization with database-backed member roles
+- Existing environment administrator sessions remain a secure Root fallback
+- Sensitive operations re-read the current database role, so Staff revocation takes effect immediately
+- Root-only Staff/User Management with safe search, role assignment, transactional deletion, and Root protection
+- Root accounts are excluded from the management list and cannot be demoted or deleted through the API
+- Root and Staff have full Service and Announcement CRUD; only Root can manage users and customer requests
+- Announcement Edit deep links from the public homepage load the correct record, focus and scroll to the rendered editor, persist PATCH updates, and safely handle invalid IDs
+- Role-aware public navigation gives Root and Staff one consistent Company Management entry without duplicate member links
+- Admin navigation uses a home-linked logo, one bottom Sign out action, and responsive equal-width action rows
+- HttpOnly cookies, production Secure flags, SameSite policies, CSRF checks, rate limiting, validation, and parameterized SQL remain enforced
+- The API stays at 12 Vercel Functions, within the Hobby limit
+
 ## Shared architecture and database
 
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
 - Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001` through `db/migrations/006_create_customer_requests.sql` in numeric order
+- Migrations: run `001` through `db/migrations/008_reconcile_user_tasks.sql` in numeric order
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
@@ -98,6 +130,8 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/003_create_users_and_
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/004_create_user_tasks.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/005_create_services.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/006_create_customer_requests.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/007_add_user_roles.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/008_reconcile_user_tasks.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
@@ -130,7 +164,7 @@ To change the administrator username or password, generate a new hash, update `A
 
 No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
 
-Run migrations 002 through 006 once against each environment's database, after migration 001. Migrations 005 and 006 are non-destructive and create the company services and customer request tables plus their indexes.
+Run migrations 002 through 008 once against each environment's database, after migration 001. Migration 007 safely backfills existing members to `user` before enforcing its role constraint. Migration 008 safely reconciles the member task table with `IF NOT EXISTS`; neither migration deletes existing data.
 
 Neon SQL Editor alternative:
 
@@ -142,11 +176,11 @@ Neon SQL Editor alternative:
 ## Vercel deployment
 
 1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
-2. Run migrations 001 through 006 on a new Preview/Development database; run migrations 005 and 006 on a database already current through Task 4, or only 006 if it is already current through Task 6.
+2. Run migrations 001 through 008 in numeric order on a new Preview/Development database. For an existing database already current through Task 7, apply migrations 007 and 008 before deploying the RBAC build.
 3. In Vercel: project → **Settings** → **Environment Variables**, preserve the five existing variables above. Task 4 adds none.
 4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
 5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all implemented tasks documented above.
-6. After Preview passes, ensure migrations 001 through 006 have run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
+6. After Preview passes, ensure migrations 001 through 008 have run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
 
 Environment-variable changes affect only new deployments, so adding or rotating any of these values requires redeployment. Database migration alone does not require redeployment, but deploy only after its target schema is ready.
 
@@ -169,6 +203,9 @@ Use the Preview URL first, then repeat on the production URL without destructive
 13. While signed in only as a member, attempt announcement `POST`, `PATCH`, and `DELETE`; each must return `401`, while public announcements and customer request submission remain available.
 14. Submit another customer request while signed in as a member and confirm it is associated with that member.
 15. Sign in at `/admin`, filter customer requests, open the details, and update the request through all supported statuses.
+16. Promote a test member to Staff, sign in as that member, and verify Service and Announcement create/edit/delete are available while Users and Customer Requests remain hidden and return `403` when called directly.
+17. Open an Announcement Edit link from the public homepage and verify the correct editor is focused, the PATCH persists, Cancel does not mutate data, and an invalid ID shows a safe message.
+18. At 320, 360, 390, 768, 1024, 1280, and 1440 pixels, confirm the public/member/Admin headers and action rows have no overlap or horizontal overflow.
 
 The UI prevents blank/overlong input. Automated handler tests also cover blank values, 101-character titles, invalid IDs, missing rows, unauthorized writes, cross-origin writes, and logout.
 
@@ -182,6 +219,8 @@ npm run verify:ui
 ```
 
 API tests use injected repositories and do not touch a real database. Live persistence must be verified against a safe Development/Preview database after migration.
+
+The Playwright verification also covers Announcement deep-link editing, Root/Staff navigation, one bottom-only Admin sign-out action, mobile two-column action layouts, and responsive screenshots in `artifacts/ui/`.
 
 ## Troubleshooting and logs
 
