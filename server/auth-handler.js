@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { clearSessionCookie, createSession, hasValidOrigin, isAdmin, sessionCookie } from './auth.js';
 import { clientIp, parseBody, send } from './http.js';
 import { verifyPassword } from './password.js';
+import { getAuthenticatedPrincipal, permissionsFor } from './rbac.js';
 
 function attemptKey(req, username) {
   return createHash('sha256').update(`${clientIp(req)}\n${username.toLowerCase()}`).digest('hex');
@@ -37,7 +38,16 @@ export function createLoginHandler(repository) {
 export function sessionHandler(req, res) {
   if (req.method !== 'GET') { res.setHeader('Allow', 'GET'); return send(res, 405, { error: 'Method not allowed.' }); }
   res.setHeader('Cache-Control', 'no-store');
-  return send(res, 200, { authenticated: isAdmin(req) });
+  if (isAdmin(req)) return send(res, 200, { authenticated: true, role: 'root', permissions: permissionsFor('root') });
+  return (async () => { try {
+    const principal = await getAuthenticatedPrincipal(req);
+    if (!principal) return send(res, 200, { authenticated: false });
+    if (!['root', 'staff'].includes(principal.role)) return send(res, 403, { authenticated: false, error: 'Administrator access is not permitted.' });
+    return send(res, 200, { authenticated: true, role: principal.role, permissions: permissionsFor(principal.role) });
+  } catch (error) {
+    console.error('Administrator session check failed:', error instanceof Error ? error.message : 'Unknown error');
+    return send(res, 500, { authenticated: false, error: 'Session verification is temporarily unavailable.' });
+  } })();
 }
 
 export function logoutHandler(req, res) {

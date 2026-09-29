@@ -17,9 +17,9 @@ test('login creates server-verifiable HttpOnly session and logout invalidates br
   await createLoginHandler(repository)({ method: 'POST', headers, body: { username: 'admin', password: 'correct horse battery staple' }, socket: {} }, loginRes);
   assert.equal(loginRes.statusCode, 200); assert.match(loginRes.headers['Set-Cookie'], /HttpOnly/);
   const cookie = loginRes.headers['Set-Cookie'].split(';')[0]; const sessionRes = response();
-  sessionHandler({ method: 'GET', headers: { cookie } }, sessionRes); assert.equal(sessionRes.payload.authenticated, true);
+  await sessionHandler({ method: 'GET', headers: { cookie } }, sessionRes); assert.equal(sessionRes.payload.authenticated, true);
   const logoutRes = response(); logoutHandler({ method: 'POST', headers }, logoutRes); assert.match(logoutRes.headers['Set-Cookie'], /Max-Age=0/);
-  const loggedOutRes = response(); sessionHandler({ method: 'GET', headers: { cookie: logoutRes.headers['Set-Cookie'].split(';')[0] } }, loggedOutRes); assert.equal(loggedOutRes.payload.authenticated, false);
+  const loggedOutRes = response(); await sessionHandler({ method: 'GET', headers: { cookie: logoutRes.headers['Set-Cookie'].split(';')[0] } }, loggedOutRes); assert.equal(loggedOutRes.payload.authenticated, false);
 });
 
 test('wrong password is rejected and database-backed limiter can block attempts', async () => {

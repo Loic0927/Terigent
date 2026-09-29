@@ -1,12 +1,13 @@
-import { hasValidOrigin, isAdmin } from './auth.js';
+import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
+import { requirePermission } from './rbac.js';
 import { validatePublicServiceQuery, validateService } from './service-validation.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 const isJson = req => String(req.headers?.['content-type'] || '').toLowerCase().split(';')[0].trim() === 'application/json';
 
-function authorizeMutation(req, res) {
-  if (!isAdmin(req)) { send(res, 401, { error: 'Administrator sign-in is required.' }); return false; }
+async function authorizeMutation(req, res, permission, authorize) {
+  if (!await authorize(req, res, permission)) return false;
   if (!hasValidOrigin(req)) { send(res, 403, { error: 'Request origin could not be verified.' }); return false; }
   return true;
 }
@@ -42,10 +43,10 @@ export function createPublicServicesHandler(repository) {
   };
 }
 
-export function createAdminServicesHandler(repository) {
+export function createAdminServicesHandler(repository, authorize = requirePermission) {
   return async function adminServicesHandler(req, res) {
     if (!['GET', 'POST'].includes(req.method)) { res.setHeader('Allow', 'GET, POST'); return send(res, 405, { error: 'Method not allowed.' }); }
-    if (!isAdmin(req)) return send(res, 401, { error: 'Administrator sign-in is required.' });
+    if (!await authorize(req, res, req.method === 'GET' ? 'services:view' : 'services:create')) return undefined;
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       try { return send(res, 200, { services: await repository.listAdminServices() }); }
@@ -65,10 +66,10 @@ export function createAdminServicesHandler(repository) {
   };
 }
 
-export function createAdminServiceItemHandler(repository) {
+export function createAdminServiceItemHandler(repository, authorize = requirePermission) {
   return async function adminServiceItemHandler(req, res) {
     if (!['PATCH', 'DELETE'].includes(req.method)) { res.setHeader('Allow', 'PATCH, DELETE'); return send(res, 405, { error: 'Method not allowed.' }); }
-    if (!authorizeMutation(req, res)) return undefined;
+    if (!await authorizeMutation(req, res, req.method === 'PATCH' ? 'services:update' : 'services:delete', authorize)) return undefined;
     const id = Array.isArray(req.query?.id) ? req.query.id[0] : req.query?.id;
     if (!validId(id)) return send(res, 400, { error: 'Invalid service ID.' });
     try {

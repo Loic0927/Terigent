@@ -28,6 +28,8 @@ function validate(form, fields) {
 
 export default function Admin() {
   const [auth, setAuth] = useState('checking');
+  const [role, setRole] = useState(null);
+  const [permissions, setPermissions] = useState([]);
   const [login, setLogin] = useState({ username: '', password: '' });
   const [loginState, setLoginState] = useState({ sending: false, error: '' });
   const [announcements, setAnnouncements] = useState([]);
@@ -43,6 +45,11 @@ export default function Admin() {
   const [editingService, setEditingService] = useState(null);
   const [announcementState, setAnnouncementState] = useState(cleanState);
   const [serviceState, setServiceState] = useState(cleanState);
+  const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userState, setUserState] = useState({ state: 'idle', notice: '' });
+
+  const can = permission => permissions.includes(permission);
 
   const load = useCallback(async () => {
     setListState({ announcements: 'loading', services: 'loading' });
@@ -64,14 +71,33 @@ export default function Admin() {
     try { const payload = await api(`/api/admin/customer-requests?limit=50${status ? `&status=${encodeURIComponent(status)}` : ''}`); setRequests(payload.requests || []); setRequestState({ state: 'ready', notice: '' }); }
     catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState({ state: 'error', notice: error.message }); }
   }, []);
-  useEffect(() => { api('/api/admin/auth/session').then(result => { setAuth(result.authenticated ? 'authenticated' : 'anonymous'); if (result.authenticated) { load(); loadRequests(); } }).catch(() => setAuth('anonymous')); }, [load, loadRequests]);
+  const loadUsers = useCallback(async (search = '') => {
+    setUserState({ state: 'loading', notice: '' });
+    try { const payload = await api(`/api/admin/users${search ? `?q=${encodeURIComponent(search)}` : ''}`); setUsers(payload.users || []); setUserState({ state: 'ready', notice: '' }); }
+    catch (error) { setUserState({ state: 'error', notice: error.message }); }
+  }, []);
+  useEffect(() => { api('/api/admin/auth/session').then(result => {
+    if (!result.authenticated) return setAuth('anonymous');
+    setRole(result.role); setPermissions(result.permissions || []); setAuth('authenticated'); load();
+    if (result.role === 'root') { loadRequests(); loadUsers(); }
+  }).catch(error => setAuth(error.status === 403 ? 'forbidden' : 'anonymous')); }, [load, loadRequests, loadUsers]);
 
   const submitLogin = async event => {
     event.preventDefault(); setLoginState({ sending: true, error: '' });
-    try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); setAuth('authenticated'); await Promise.all([load(), loadRequests()]); setLoginState({ sending: false, error: '' }); }
+    try { await api('/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(login) }); setLogin({ username: '', password: '' }); const session = await api('/api/admin/auth/session'); setRole(session.role); setPermissions(session.permissions || []); setAuth('authenticated'); await Promise.all([load(), loadRequests(), loadUsers()]); setLoginState({ sending: false, error: '' }); }
     catch (error) { setLoginState({ sending: false, error: error.message }); }
   };
-  const logout = async () => { try { await api('/api/admin/auth/logout', { method: 'POST' }); } finally { setAuth('anonymous'); setAnnouncements([]); setServices([]); } };
+  const logout = async () => { try { await Promise.allSettled([api('/api/admin/auth/logout', { method: 'POST' }), api('/api/auth/logout', { method: 'POST' })]); } finally { setAuth('anonymous'); setRole(null); setPermissions([]); setAnnouncements([]); setServices([]); setUsers([]); } };
+
+  const changeUser = async (user, action) => {
+    const description = action === 'delete' ? `delete ${user.name} (${user.email})` : `${action === 'staff' ? 'grant staff access to' : 'revoke staff access from'} ${user.name}`;
+    if (!window.confirm(`Are you sure you want to ${description}?`)) return;
+    setUserState({ state: 'ready', notice: 'Updating user...' });
+    try {
+      await api('/api/admin/users', { method: action === 'delete' ? 'DELETE' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'delete' ? { id: user.id } : { id: user.id, role: action }) });
+      await loadUsers(userSearch); setUserState({ state: 'ready', notice: action === 'delete' ? 'User deleted.' : 'User role updated.' });
+    } catch (error) { setUserState({ state: 'error', notice: error.message }); }
+  };
 
   const submitAnnouncement = async event => {
     event.preventDefault(); const errors = validate(announcementForm, ['title', 'content']);
@@ -104,20 +130,24 @@ export default function Admin() {
   const changeRequestStatus = async status => { if (!selectedRequest) return; setRequestState(current => ({ ...current, notice: 'Updating status...' })); try { const payload = await api(`/api/admin/customer-requests/${selectedRequest.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); setSelectedRequest(payload.request); await loadRequests(requestFilter); setRequestState({ state: 'ready', notice: 'Status updated successfully.' }); } catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState(current => ({ ...current, notice: error.message })); } };
 
   if (auth === 'checking') return <main className="admin-shell"><p role="status">Checking administrator session...</p></main>;
+  if (auth === 'forbidden') return <main className="admin-shell"><div className="admin-login"><Logo /><h1>Access denied</h1><p>Your account does not have administrator permissions.</p><a className="button" href="/dashboard">Return to dashboard</a></div></main>;
   if (auth === 'anonymous') return <main className="admin-shell"><div className="admin-login"><Logo /><a href="/#services" className="admin-back"><HiOutlineArrowLeft /> Back to website</a><h1>Administrator sign in</h1><p>Sign in to manage company services and announcements.</p><form onSubmit={submitLogin}>
-    <label>Username<input autoComplete="username" value={login.username} onChange={e => setLogin({ ...login, username: e.target.value })} required /></label><label>Password<input type="password" autoComplete="current-password" value={login.password} onChange={e => setLogin({ ...login, password: e.target.value })} required /></label>
+    <p>Staff members should <a href="/login">sign in with their member account</a>, then return to this page.</p><label>Root username<input autoComplete="username" value={login.username} onChange={e => setLogin({ ...login, username: e.target.value })} required /></label><label>Root password<input type="password" autoComplete="current-password" value={login.password} onChange={e => setLogin({ ...login, password: e.target.value })} required /></label>
     {loginState.error && <p className="admin-notice error" role="alert">{loginState.error}</p>}<button className="button" disabled={loginState.sending}>{loginState.sending ? 'Signing in...' : 'Sign in'}</button>
   </form></div></main>;
 
   const editAnnouncement = item => { setEditingAnnouncement(item.id); setAnnouncementForm({ title: item.title, content: item.content }); setAnnouncementState(cleanState); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const editService = item => { setEditingService(item.id); setServiceForm({ name: item.name, description: item.description, category: item.category, pricingText: item.pricingText || '', active: item.active }); setServiceState(cleanState); document.querySelector('#service-editor')?.scrollIntoView({ behavior: 'smooth' }); };
 
-  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Company management</h1></div><div><a className="button button-ghost button-small" href="/#services"><HiOutlineArrowLeft /> Back to website</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
-    <section className="admin-panel" id="customer-requests"><div className="request-panel-heading"><h2>Customer requests</h2><select aria-label="Filter customer requests by status" value={requestFilter} onChange={event => { setRequestFilter(event.target.value); setSelectedRequest(null); loadRequests(event.target.value); }}><option value="">All statuses</option>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
+  return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div><Logo /><h1>Company management</h1><p>Signed in as <strong>{role}</strong></p></div><div><a className="button button-ghost button-small" href="/#services"><HiOutlineArrowLeft /> Back to website</a><button className="button button-small" onClick={logout}>Sign out</button></div></header>
+    {role === 'root' && <><section className="admin-panel" id="user-management"><div className="request-panel-heading"><h2>Staff / User Management</h2><form onSubmit={event => { event.preventDefault(); loadUsers(userSearch); }}><input aria-label="Search users by name or email" value={userSearch} maxLength="100" placeholder="Search name or email" onChange={event => setUserSearch(event.target.value)} /><button className="button button-small">Search</button></form></div>
+      {userState.state === 'loading' && <p role="status">Loading users...</p>}{userState.notice && <p className={`admin-notice ${userState.state === 'error' ? 'error' : 'success'}`} role="status">{userState.notice}</p>}{userState.state === 'ready' && !users.length && <p>No users match this search.</p>}
+      <div className="admin-list user-list">{users.map(user => <article key={user.id}><div><h3>{user.name}</h3><p>{user.email}</p><small>{user.role} · Joined {new Date(user.createdAt).toLocaleString()}</small></div><div>{user.role === 'user' && <button className="button button-small" onClick={() => changeUser(user, 'staff')}>Grant staff</button>}{user.role === 'staff' && <button className="button button-ghost button-small" onClick={() => changeUser(user, 'user')}>Revoke staff</button>}{user.role !== 'root' && <button className="button button-danger button-small" onClick={() => changeUser(user, 'delete')}><HiOutlineTrash /> Delete</button>}</div></article>)}</div>
+    </section><section className="admin-panel" id="customer-requests"><div className="request-panel-heading"><h2>Customer requests</h2><select aria-label="Filter customer requests by status" value={requestFilter} onChange={event => { setRequestFilter(event.target.value); setSelectedRequest(null); loadRequests(event.target.value); }}><option value="">All statuses</option>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
       {requestState.state === 'loading' && <p role="status">Loading customer requests...</p>}{requestState.state === 'error' && <p className="admin-notice error" role="alert">{requestState.notice} <button onClick={() => loadRequests(requestFilter)}>Try again</button></p>}{requestState.state === 'ready' && !requests.length && <p>No customer requests match this filter.</p>}
       <div className="request-list">{requests.map(item => <button type="button" key={item.id} className={selectedRequest?.id === item.id ? 'selected' : ''} onClick={() => openRequest(item)}><span><strong>{item.subject}</strong><small>{item.fullName} · {new Date(item.createdAt).toLocaleString()}</small></span><span className={`request-status status-${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span><HiOutlineEye /></button>)}</div>
       {selectedRequest && <article className="request-detail"><div className="request-detail-heading"><div><small>Request #{selectedRequest.id}</small><h3>{selectedRequest.subject}</h3></div><label>Status <select value={selectedRequest.status} onChange={event => changeRequestStatus(event.target.value)}>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label></div><dl><div><dt>Customer</dt><dd>{selectedRequest.fullName}</dd></div><div><dt>Email</dt><dd><a href={`mailto:${selectedRequest.email}`}>{selectedRequest.email}</a></dd></div><div><dt>Submitted</dt><dd>{new Date(selectedRequest.createdAt).toLocaleString()}</dd></div></dl><p>{selectedRequest.details}</p>{requestState.notice && <p className={`admin-notice ${requestState.notice.includes('success') ? 'success' : ''}`} role="status">{requestState.notice}</p>}</article>}
-    </section>
+    </section></>}
     <section className="admin-panel" id="service-editor"><h2>{editingService ? 'Edit service' : 'New service'}</h2><form className="admin-form service-form" onSubmit={submitService} noValidate>
       <label>Name <span>{serviceForm.name.length}/{LIMITS.name}</span><input value={serviceForm.name} maxLength={LIMITS.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} aria-invalid={Boolean(serviceState.errors.name)} />{serviceState.errors.name && <small>{serviceState.errors.name}</small>}</label>
       <label>Category <span>{serviceForm.category.length}/{LIMITS.category}</span><input value={serviceForm.category} maxLength={LIMITS.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })} aria-invalid={Boolean(serviceState.errors.category)} />{serviceState.errors.category && <small>{serviceState.errors.category}</small>}</label>
@@ -127,7 +157,7 @@ export default function Admin() {
       {serviceState.notice && <p className={`admin-notice ${serviceState.success ? 'success' : 'error'}`} role="status">{serviceState.notice}</p>}<div className="admin-form-actions">{editingService && <button type="button" className="button button-ghost" onClick={() => { setEditingService(null); setServiceForm(EMPTY_SERVICE); setServiceState(cleanState); }} disabled={serviceState.sending}>Cancel</button>}<button className="button" disabled={serviceState.sending}><HiOutlinePlus /> {serviceState.sending ? 'Saving...' : editingService ? 'Save changes' : 'Create service'}</button></div>
     </form></section>
     <section className="admin-panel"><h2>Company services</h2>{listState.services === 'loading' && <p role="status">Loading services...</p>}{listState.services === 'error' && <p className="admin-notice error">Services could not be loaded. <button onClick={load}>Try again</button></p>}{listState.services === 'ready' && !services.length && <p>No services yet.</p>}
-      <div className="admin-list">{services.map(item => <article key={item.id}><div><div className="admin-item-heading"><h3>{item.name}</h3><span className={item.active ? 'status-active' : 'status-inactive'}>{item.active ? 'Public' : 'Hidden'}</span></div><small>{item.category}{item.pricingText ? ` · ${item.pricingText}` : ''}</small><p>{item.description}</p></div><div><button className="button button-ghost button-small" onClick={() => editService(item)}><HiOutlinePencilSquare /> Edit</button><button className="button button-danger button-small" onClick={() => remove('service', item)}><HiOutlineTrash /> Delete</button></div></article>)}</div>
+      <div className="admin-list">{services.map(item => <article key={item.id}><div><div className="admin-item-heading"><h3>{item.name}</h3><span className={item.active ? 'status-active' : 'status-inactive'}>{item.active ? 'Public' : 'Hidden'}</span></div><small>{item.category}{item.pricingText ? ` · ${item.pricingText}` : ''}</small><p>{item.description}</p></div>{can('services:update') && <div><button className="button button-ghost button-small" onClick={() => editService(item)}><HiOutlinePencilSquare /> Edit</button><button className="button button-danger button-small" onClick={() => remove('service', item)}><HiOutlineTrash /> Delete</button></div>}</article>)}</div>
     </section>
     <section className="admin-panel"><h2>{editingAnnouncement ? 'Edit announcement' : 'New announcement'}</h2><form className="admin-form announcement-form" onSubmit={submitAnnouncement} noValidate>
       <label>Title <span>{announcementForm.title.length}/{LIMITS.title}</span><input value={announcementForm.title} maxLength={LIMITS.title} onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })} aria-invalid={Boolean(announcementState.errors.title)} />{announcementState.errors.title && <small>{announcementState.errors.title}</small>}</label>
@@ -135,7 +165,7 @@ export default function Admin() {
       {announcementState.notice && <p className={`admin-notice ${announcementState.success ? 'success' : 'error'}`} role="status">{announcementState.notice}</p>}<div className="admin-form-actions">{editingAnnouncement && <button type="button" className="button button-ghost" onClick={() => { setEditingAnnouncement(null); setAnnouncementForm(EMPTY_ANNOUNCEMENT); setAnnouncementState(cleanState); }} disabled={announcementState.sending}>Cancel</button>}<button className="button" disabled={announcementState.sending}><HiOutlinePlus /> {announcementState.sending ? 'Saving...' : editingAnnouncement ? 'Save changes' : 'Publish announcement'}</button></div>
     </form></section>
     <section className="admin-panel"><h2>Existing announcements</h2>{listState.announcements === 'loading' && <p role="status">Loading announcements...</p>}{listState.announcements === 'error' && <p className="admin-notice error">Announcements could not be loaded. <button onClick={load}>Try again</button></p>}{listState.announcements === 'ready' && !announcements.length && <p>No announcements yet.</p>}
-      <div className="admin-list">{announcements.map(item => <article key={item.id}><div><h3>{item.title}</h3><p>{item.content}</p></div><div><button className="button button-ghost button-small" onClick={() => editAnnouncement(item)}><HiOutlinePencilSquare /> Edit</button><button className="button button-danger button-small" onClick={() => remove('announcement', item)}><HiOutlineTrash /> Delete</button></div></article>)}</div>
+      <div className="admin-list">{announcements.map(item => <article key={item.id}><div><h3>{item.title}</h3><p>{item.content}</p></div>{can('announcements:update') && <div><button className="button button-ghost button-small" onClick={() => editAnnouncement(item)}><HiOutlinePencilSquare /> Edit</button><button className="button button-danger button-small" onClick={() => remove('announcement', item)}><HiOutlineTrash /> Delete</button></div>}</article>)}</div>
     </section>
   </div></main>;
 }

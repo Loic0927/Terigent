@@ -1,10 +1,11 @@
-import { isAdmin, hasValidOrigin } from './auth.js';
+import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
+import { requirePermission } from './rbac.js';
 import { validateAnnouncement } from './announcement-validation.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 
-export function createAnnouncementsHandler(repository) {
+export function createAnnouncementsHandler(repository, authorize = requirePermission) {
   return async function announcementsHandler(req, res) {
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
@@ -15,7 +16,7 @@ export function createAnnouncementsHandler(repository) {
       }
     }
     if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return send(res, 405, { error: 'Method not allowed.' }); }
-    if (!isAdmin(req)) return send(res, 401, { error: 'Administrator sign-in is required.' });
+    if (!await authorize(req, res, 'announcements:create')) return undefined;
     if (!hasValidOrigin(req)) return send(res, 403, { error: 'Request origin could not be verified.' });
     const parsed = parseBody(req);
     if (parsed.error === 'too_large') return send(res, 413, { error: 'Request is too large.' });
@@ -30,10 +31,10 @@ export function createAnnouncementsHandler(repository) {
   };
 }
 
-export function createAnnouncementItemHandler(repository) {
+export function createAnnouncementItemHandler(repository, authorize = requirePermission) {
   return async function announcementItemHandler(req, res) {
     if (!['PATCH', 'DELETE'].includes(req.method)) { res.setHeader('Allow', 'PATCH, DELETE'); return send(res, 405, { error: 'Method not allowed.' }); }
-    if (!isAdmin(req)) return send(res, 401, { error: 'Administrator sign-in is required.' });
+    if (!await authorize(req, res, req.method === 'PATCH' ? 'announcements:update' : 'announcements:delete')) return undefined;
     if (!hasValidOrigin(req)) return send(res, 403, { error: 'Request origin could not be verified.' });
     const id = Array.isArray(req.query?.id) ? req.query.id[0] : req.query?.id;
     if (!validId(id)) return send(res, 400, { error: 'Invalid announcement ID.' });

@@ -53,7 +53,9 @@ try {
   await adminPage.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
   await adminPage.route('**/api/admin/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
   await adminPage.route('**/api/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
-  await adminPage.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true }) }));
+  await adminPage.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, role: 'root', permissions: ['services:view','services:create','services:update','services:delete','announcements:view','announcements:create','announcements:update','announcements:delete','users:view','users:assign-role','users:delete','customer-requests:manage'] }) }));
+  await adminPage.route('**/api/admin/users*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: [{ id: '7', name: 'Staff Member', email: 'staff@example.test', role: 'staff', createdAt: '2026-09-20T00:00:00.000Z' }] }) }));
+  await adminPage.route('**/api/admin/customer-requests*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ requests: [], total: 0 }) }));
   adminPage.on('pageerror', error => adminErrors.push(error.message));
   await adminPage.goto(baseUrl, { waitUntil: 'networkidle' });
   await adminPage.locator('.announcement-pin-trigger').click();
@@ -62,7 +64,8 @@ try {
   await adminPage.waitForURL('**/admin?edit=2');
   await adminPage.locator('.announcement-form input').waitFor();
   if (await adminPage.locator('.announcement-form input').inputValue() !== 'Second announcement') adminErrors.push('Deep link did not open the requested non-latest announcement.');
-  if (await adminPage.locator('.admin-list').first().locator('article').count() !== services.length) adminErrors.push('Admin service list was not rendered.');
+  if (await adminPage.getByRole('heading', { name: 'Company services' }).locator('..').locator('.admin-list article').count() !== services.length) adminErrors.push('Admin service list was not rendered.');
+  if (!(await adminPage.getByRole('heading', { name: 'Staff / User Management' }).isVisible())) adminErrors.push('Root user management was not rendered.');
   results.push({ viewport: 'admin-deep-link', sections: 1, expectedSections: 1, horizontalOverflow: false, consoleErrors: adminErrors });
   await adminPage.close();
 
