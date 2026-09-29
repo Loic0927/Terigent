@@ -1,10 +1,12 @@
 import { chromium } from 'playwright-core';
+import { mkdir } from 'node:fs/promises';
 import { preview } from 'vite';
 
 const server = await preview({ preview: { host: '127.0.0.1', port: 4173 } });
 const baseUrl = server.resolvedUrls.local[0].replace(/\/$/, '');
 
 try {
+  await mkdir('artifacts/ui', { recursive: true });
   const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
   const results = [];
   const announcements = [
@@ -113,6 +115,50 @@ try {
   const accountOverflow = await accountPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   results.push({ viewport: 'account-mobile', sections: 1, expectedSections: 1, horizontalOverflow: accountOverflow, consoleErrors: accountErrors });
   await accountPage.close();
+
+  const responsiveViewports = [
+    { name: '320', width: 320, height: 800 }, { name: '360', width: 360, height: 800 },
+    { name: '390', width: 390, height: 844 }, { name: '768', width: 768, height: 900 },
+    { name: '1024', width: 1024, height: 900 }, { name: '1440', width: 1440, height: 900 },
+  ];
+  for (const viewport of responsiveViewports) {
+    const memberPage = await browser.newPage({ viewport });
+    const memberErrors = [];
+    await memberPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'A Very Long Customer Display Name', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
+    await memberPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+    memberPage.on('pageerror', error => memberErrors.push(error.message));
+    await memberPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
+    if (viewport.width <= 960) { await memberPage.locator('.member-menu-button').click(); if (!(await memberPage.locator('.member-nav').isVisible())) memberErrors.push('Member navigation did not open.'); }
+    const memberOverflow = await memberPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    await memberPage.screenshot({ path: `artifacts/ui/member-${viewport.name}.png`, fullPage: true });
+    results.push({ viewport: `member-${viewport.name}`, sections: 1, expectedSections: 1, horizontalOverflow: memberOverflow, consoleErrors: memberErrors });
+    await memberPage.close();
+
+    const role = viewport.width === 390 ? 'staff' : 'root';
+    const rolePermissions = role === 'staff'
+      ? ['services:view','services:create','services:update','announcements:view','announcements:create','announcements:update']
+      : ['services:view','services:create','services:update','services:delete','announcements:view','announcements:create','announcements:update','announcements:delete','users:view','users:assign-role','users:delete','customer-requests:manage'];
+    const page = await browser.newPage({ viewport });
+    const errors = [];
+    await page.route('**/api/admin/auth/session', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: true, role, permissions: rolePermissions }) }));
+    await page.route('**/api/announcements', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ announcements }) }));
+    await page.route('**/api/admin/services', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ services }) }));
+    await page.route('**/api/admin/users*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: [{ id: '7', name: 'Staff Member', email: 'staff@example.test', role: 'staff', createdAt: '2026-09-20T00:00:00.000Z' }, { id: '8', name: 'Root Member', email: 'root@example.test', role: 'root', createdAt: '2026-09-20T00:00:00.000Z' }] }) }));
+    await page.route('**/api/admin/customer-requests*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ requests: [], total: 0 }) }));
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`${baseUrl}/admin`, { waitUntil: 'networkidle' });
+    const deleteButtons = await page.getByRole('button', { name: /Delete/ }).count();
+    const editButtons = await page.getByRole('button', { name: /Edit/ }).count();
+    if (!editButtons) errors.push(`${role} did not see edit controls.`);
+    if (role === 'staff' && deleteButtons) errors.push('Staff saw delete controls.');
+    if (role === 'staff' && (await page.locator('#user-management,#customer-requests').count())) errors.push('Staff saw root-only sections.');
+    if (role === 'root' && !(await page.locator('#user-management').count())) errors.push('Root user management was missing.');
+    if (await page.getByText('Root Member', { exact: true }).count()) errors.push('Root account appeared in user management.');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    await page.screenshot({ path: `artifacts/ui/admin-${role}-${viewport.name}.png`, fullPage: true });
+    results.push({ viewport: `admin-${role}-${viewport.name}`, sections: 1, expectedSections: 1, horizontalOverflow: overflow, consoleErrors: errors });
+    await page.close();
+  }
 
   for (const path of ['login', 'register']) {
     for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'mobile', width: 390, height: 844 }]) {

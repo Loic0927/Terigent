@@ -17,7 +17,7 @@ export function createAdminUsersHandler(repository, authorize = requirePermissio
       const raw = Array.isArray(req.query?.q) ? null : req.query?.q;
       const search = typeof raw === 'string' ? raw.trim() : '';
       if (raw !== undefined && (raw === null || typeof raw !== 'string' || search.length > 100)) return send(res, 400, { error: 'Invalid search query.' });
-      try { return send(res, 200, { users: await repository.listUsers(search) }); }
+      try { const users = await repository.listUsers(search); return send(res, 200, { users: users.filter(user => user.role !== 'root') }); }
       catch (error) { console.error('User list failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'Users could not be loaded right now.' }); }
     }
     if (!hasValidOrigin(req)) return send(res, 403, { error: 'Request origin could not be verified.' });
