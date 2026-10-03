@@ -4,6 +4,7 @@ import { preview } from 'vite';
 
 const server = await preview({ preview: { host: '127.0.0.1', port: 4173 } });
 const baseUrl = server.resolvedUrls.local[0].replace(/\/$/, '');
+const previewPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
 try {
   await mkdir('artifacts/ui', { recursive: true });
@@ -100,12 +101,20 @@ try {
   const dashboardPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const dashboardErrors = [];
   await dashboardPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'Test Member', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
-  await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
-  await dashboardPage.route('**/api/documents', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [{ id: '1', filename: 'A very long example document filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }], nextCursor: null }) }));
+  await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [{ id: '10', title: 'Task with documents', description: '', status: 'not-started', priority: 'Medium', deadline: '2026-12-01', reminder: 'No reminder', assignee: '', project: '', attachments: [{ id: '1', filename: 'task-image.png', mimeType: 'image/png', sizeBytes: 68 }, { id: '2', filename: 'A very long PDF attachment filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048 }] }] }) }));
+  await dashboardPage.route('**/api/documents', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [{ id: '1', filename: 'task-image.png', mimeType: 'image/png', sizeBytes: 68, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }, { id: '2', filename: 'A very long example document filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }], nextCursor: null }) }));
+  await dashboardPage.route('**/api/documents/1/content', route => route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Cache-Control': 'private, no-store', 'Content-Disposition': 'inline' }, body: previewPixel }));
   dashboardPage.on('pageerror', error => dashboardErrors.push(error.message));
   await dashboardPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await dashboardPage.reload({ waitUntil: 'networkidle' });
   if (!(await dashboardPage.getByText('Welcome,').isVisible())) dashboardErrors.push('Dashboard did not render after direct load and refresh.');
+  const previewButton = dashboardPage.getByRole('button', { name: 'Preview task-image.png' }).last();
+  await previewButton.click();
+  if (!(await dashboardPage.getByRole('dialog', { name: 'task-image.png' }).isVisible())) dashboardErrors.push('Task image preview did not open.');
+  await dashboardPage.keyboard.press('Escape');
+  if (await dashboardPage.getByRole('dialog', { name: 'task-image.png' }).count()) dashboardErrors.push('Task image preview did not close with Escape.');
+  if (!(await previewButton.evaluate(element => element === document.activeElement))) dashboardErrors.push('Preview focus did not return to its trigger.');
+  if (await dashboardPage.getByRole('button', { name: /Preview A very long PDF/ }).count()) dashboardErrors.push('PDF unexpectedly offered image preview.');
   await dashboardPage.locator('.member-menu-button').click();
   if (!(await dashboardPage.locator('.member-nav').isVisible())) dashboardErrors.push('Member mobile navigation did not open.');
   const dashboardOverflow = await dashboardPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);

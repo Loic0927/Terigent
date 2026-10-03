@@ -1,5 +1,6 @@
 import { getPool } from './database.js';
-const columns = `id::text, original_filename AS "filename", storage_key AS "storageKey", mime_type AS "mimeType", size_bytes AS "sizeBytes", status, created_at AS "createdAt"`;
+const columns = `id::text, original_filename AS "filename", mime_type AS "mimeType", size_bytes AS "sizeBytes", status, created_at AS "createdAt"`;
+const internalColumns = `${columns}, storage_key AS "storageKey"`;
 
 export async function listDocuments(userId, cursor, limit) {
   const values = [userId, limit + 1];
@@ -29,7 +30,8 @@ export async function reserveUpload(userId, document, storageKey, maxDocuments =
 export async function markReady(userId,id){const result=await getPool().query(`UPDATE documents SET status='ready',updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2 AND status='pending' RETURNING ${columns}`,[id,userId]);return result.rows[0]||null;}
 export async function markCleanupNeeded(userId,id){await getPool().query("UPDATE documents SET status='cleanup_needed',updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2",[id,userId]);}
 export async function removeReservation(userId,id){await getPool().query("DELETE FROM documents WHERE id=$1 AND user_id=$2 AND status IN ('pending','cleanup_needed')",[id,userId]);}
-export async function findDocument(userId,id){const result=await getPool().query(`SELECT ${columns} FROM documents WHERE id=$1 AND user_id=$2 AND status IN ('ready','delete_failed')`,[id,userId]);return result.rows[0]||null;}
+export async function findDocument(userId,id){const result=await getPool().query(`SELECT ${internalColumns} FROM documents WHERE id=$1 AND user_id=$2 AND status IN ('ready','delete_failed')`,[id,userId]);return result.rows[0]||null;}
+export async function findReadyDocument(userId,id){const result=await getPool().query(`SELECT ${internalColumns} FROM documents WHERE id=$1 AND user_id=$2 AND status='ready'`,[id,userId]);return result.rows[0]||null;}
 export async function markDeleteFailed(userId,id){await getPool().query("UPDATE documents SET status='delete_failed',updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND user_id=$2",[id,userId]);}
 export async function finishDelete(userId,id){const result=await getPool().query("DELETE FROM documents WHERE id=$1 AND user_id=$2 AND status IN ('ready','delete_failed') RETURNING id",[id,userId]);return Boolean(result.rows[0]);}
 export async function listKeysForUser(userId){const result=await getPool().query('SELECT storage_key AS "storageKey" FROM documents WHERE user_id=$1',[userId]);return result.rows;}

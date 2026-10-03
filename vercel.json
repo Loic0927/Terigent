@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/api/tasks/:id/documents/:documentId", "destination": "/api/tasks?taskRoute=attachments&id=:id&documentId=:documentId" },
+    { "source": "/api/tasks/:id/documents", "destination": "/api/tasks?taskRoute=attachments&id=:id" },
     { "source": "/api/tasks/:id", "destination": "/api/tasks?taskRoute=item&id=:id" },
     { "source": "/api/documents/:id/content", "destination": "/api/documents?documentRoute=content&id=:id" },
     { "source": "/api/documents/:id/download", "destination": "/api/documents?documentRoute=download&id=:id" },

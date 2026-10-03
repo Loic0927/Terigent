@@ -101,11 +101,13 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 - Metadata in PostgreSQL migration `db/migrations/009_create_documents.sql`; bytes in a **Private** Vercel Blob store
 - One `/api/documents.js` dispatcher; Tasks were consolidated into `/api/tasks.js`, keeping the deployment at 12 Functions
 - Blob/DB compensation uses pending and cleanup states. PDF structural identification is not antivirus scanning; use a malware scanner if the threat model requires it.
+- Authenticated image previews use the private content route, an in-page object URL, loading/error retry states, keyboard dismissal, and focus restoration; downloads remain separate attachments.
+- Tasks can attach multiple existing ready documents through `task_documents`; removing an attachment keeps the document, while permanent document or task deletion cascades only the relationship.
 
 - Front end: React, Vite, React Icons, plain CSS
 - API: Vercel Node.js Functions under `api/`
 - Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001` through `db/migrations/009_create_documents.sql` in numeric order
+- Migrations: run `001` through `db/migrations/010_create_task_documents.sql` in numeric order
 
 The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
 
@@ -141,6 +143,7 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/006_create_customer_r
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/007_add_user_roles.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/008_reconcile_user_tasks.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/009_create_documents.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/010_create_task_documents.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.

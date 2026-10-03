@@ -49,7 +49,7 @@ export function createDocumentsHandler(repository, authRepository, blobs, parseU
     }
     if(['content','download','item'].includes(route)&&!validId(id))return send(res,404,{error:'Document not found.'});
     if((route==='content'||route==='download')&&req.method==='GET'){
-      let document;try{document=await repository.findDocument(user.id,id);}catch(error){logError('Document lookup failed:',error);return send(res,500,{error:route==='download'?'Download failed.':'Document could not be opened.'});}
+      let document;try{document=await (repository.findReadyDocument||repository.findDocument)(user.id,id);}catch(error){logError('Document lookup failed:',error);return send(res,500,{error:route==='download'?'Download failed.':'Document could not be opened.'});}
       if(!document)return send(res,404,{error:'Document not found.'});
       if(route==='content'&&!document.mimeType.startsWith('image/'))return send(res,404,{error:'Document not found.'});
       try{const result=await blobs.getBlob(document.storageKey);if(!result||result.statusCode!==200)return send(res,404,{error:'Document not found.'});
