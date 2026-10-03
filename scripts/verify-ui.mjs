@@ -101,6 +101,7 @@ try {
   const dashboardErrors = [];
   await dashboardPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'Test Member', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
   await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+  await dashboardPage.route('**/api/documents', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [{ id: '1', filename: 'A very long example document filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }], nextCursor: null }) }));
   dashboardPage.on('pageerror', error => dashboardErrors.push(error.message));
   await dashboardPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await dashboardPage.reload({ waitUntil: 'networkidle' });
@@ -152,6 +153,7 @@ try {
     const memberErrors = [];
     await memberPage.route('**/api/auth/me', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: { id: '1', name: 'A Very Long Customer Display Name', email: 'member@example.test', createdAt: '2026-09-15T00:00:00.000Z' } }) }));
     await memberPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [] }) }));
+    await memberPage.route('**/api/documents', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [{ id: '1', filename: 'A very long example document filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }], nextCursor: null }) }));
     memberPage.on('pageerror', error => memberErrors.push(error.message));
     await memberPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
     if (viewport.width <= 960) { await memberPage.locator('.member-menu-button').click(); if (!(await memberPage.locator('.member-nav').isVisible())) memberErrors.push('Member navigation did not open.'); }

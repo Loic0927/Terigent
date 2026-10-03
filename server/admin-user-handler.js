@@ -1,6 +1,7 @@
 import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
 import { requirePermission } from './rbac.js';
+import { deleteBlob } from './document-blob.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 
@@ -34,6 +35,10 @@ export function createAdminUsersHandler(repository, authorize = requirePermissio
         return user ? send(res, 200, { message: 'User role updated.', user }) : send(res, 404, { error: 'Eligible user not found.' });
       }
       if (keys.length !== 1 || !keys.includes('id')) return send(res, 400, { error: 'Only a user ID may be supplied.' });
+      if (repository.listDocumentKeys) {
+        const documents = await repository.listDocumentKeys(id);
+        for (const document of documents) await deleteBlob(document.storageKey);
+      }
       const user = await repository.deleteUser(id);
       return user ? send(res, 200, { message: 'User deleted.' }) : send(res, 404, { error: 'Eligible user not found.' });
     } catch (error) { console.error('User management failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'The user could not be changed right now.' }); }

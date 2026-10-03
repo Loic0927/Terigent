@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    { "source": "/api/tasks/:id", "destination": "/api/tasks?taskRoute=item&id=:id" },
+    { "source": "/api/documents/:id/content", "destination": "/api/documents?documentRoute=content&id=:id" },
+    { "source": "/api/documents/:id/download", "destination": "/api/documents?documentRoute=download&id=:id" },
+    { "source": "/api/documents/:id", "destination": "/api/documents?documentRoute=item&id=:id" },
     { "source": "/api/admin/customer-requests", "destination": "/api/customer-requests?requestRoute=admin-list" },
     { "source": "/api/admin/customer-requests/:id", "destination": "/api/customer-requests?requestRoute=admin-item&id=:id" },
     { "source": "/admin", "destination": "/index.html" },

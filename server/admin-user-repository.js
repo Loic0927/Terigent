@@ -40,10 +40,16 @@ export async function deleteUser(id) {
     const found = await client.query(`SELECT ${safeColumns} FROM users WHERE id=$1 FOR UPDATE`, [id]);
     const user = found.rows[0];
     if (!user || user.role === 'root') { await client.query('ROLLBACK'); return null; }
+    await client.query('DELETE FROM documents WHERE user_id=$1', [id]);
     await client.query('DELETE FROM user_sessions WHERE user_id=$1', [id]);
     await client.query('DELETE FROM users WHERE id=$1', [id]);
     await client.query('COMMIT');
     return user;
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
+}
+
+export async function listDocumentKeys(id) {
+  const result = await getPool().query('SELECT storage_key AS "storageKey" FROM documents WHERE user_id=$1 ORDER BY id', [id]);
+  return result.rows;
 }

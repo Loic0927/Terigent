@@ -12,11 +12,15 @@
     "verify:ui": "node scripts/verify-ui.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.0",
     "@vitejs/plugin-react": "latest",
+    "busboy": "^1.6.0",
+    "file-type": "^21.3.2",
     "pg": "^8.23.0",
     "react": "latest",
     "react-dom": "latest",
     "react-icons": "latest",
+    "sharp": "^0.35.5",
     "vite": "latest"
   },
   "devDependencies": {
