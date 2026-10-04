@@ -5,6 +5,7 @@ import { preview } from 'vite';
 const server = await preview({ preview: { host: '127.0.0.1', port: 4173 } });
 const baseUrl = server.resolvedUrls.local[0].replace(/\/$/, '');
 const previewPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+const previewPdf = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF');
 
 try {
   await mkdir('artifacts/ui', { recursive: true });
@@ -104,6 +105,7 @@ try {
   await dashboardPage.route('**/api/tasks', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tasks: [{ id: '10', title: 'Task with documents', description: '', status: 'not-started', priority: 'Medium', deadline: '2026-12-01', reminder: 'No reminder', assignee: '', project: '', attachments: [{ id: '1', filename: 'task-image.png', mimeType: 'image/png', sizeBytes: 68 }, { id: '2', filename: 'A very long PDF attachment filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048 }] }] }) }));
   await dashboardPage.route('**/api/documents', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ documents: [{ id: '1', filename: 'task-image.png', mimeType: 'image/png', sizeBytes: 68, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }, { id: '2', filename: 'A very long example document filename that wraps correctly.pdf', mimeType: 'application/pdf', sizeBytes: 2048, status: 'ready', createdAt: '2026-09-20T00:00:00.000Z' }], nextCursor: null }) }));
   await dashboardPage.route('**/api/documents/1/content', route => route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Cache-Control': 'private, no-store', 'Content-Disposition': 'inline' }, body: previewPixel }));
+  await dashboardPage.route('**/api/documents/2/content', route => route.fulfill({ status: 200, contentType: 'application/pdf', headers: { 'Cache-Control': 'private, no-store', 'Content-Disposition': 'inline' }, body: previewPdf }));
   dashboardPage.on('pageerror', error => dashboardErrors.push(error.message));
   await dashboardPage.goto(`${baseUrl}/dashboard`, { waitUntil: 'networkidle' });
   await dashboardPage.reload({ waitUntil: 'networkidle' });
@@ -114,7 +116,9 @@ try {
   await dashboardPage.keyboard.press('Escape');
   if (await dashboardPage.getByRole('dialog', { name: 'task-image.png' }).count()) dashboardErrors.push('Task image preview did not close with Escape.');
   if (!(await previewButton.evaluate(element => element === document.activeElement))) dashboardErrors.push('Preview focus did not return to its trigger.');
-  if (await dashboardPage.getByRole('button', { name: /Preview A very long PDF/ }).count()) dashboardErrors.push('PDF unexpectedly offered image preview.');
+  await dashboardPage.getByRole('button', { name: 'A very long PDF attachment filename that wraps correctly.pdf', exact: true }).click();
+  if (!(await dashboardPage.getByRole('dialog', { name: 'A very long PDF attachment filename that wraps correctly.pdf' }).locator('iframe').isVisible())) dashboardErrors.push('PDF preview did not open from its filename.');
+  await dashboardPage.getByRole('button', { name: 'Close preview' }).click();
   await dashboardPage.locator('.member-menu-button').click();
   if (!(await dashboardPage.locator('.member-nav').isVisible())) dashboardErrors.push('Member mobile navigation did not open.');
   const dashboardOverflow = await dashboardPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
