@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { hasValidOrigin } from './auth.js';
 import { send } from './http.js';
 import { hashSessionToken, readUserToken } from './user-auth.js';
@@ -53,10 +54,10 @@ export function createDocumentsHandler(repository, authRepository, blobs, parseU
       if(!document)return send(res,404,{error:'Document not found.'});
       if(route==='content'&&!document.mimeType.startsWith('image/'))return send(res,404,{error:'Document not found.'});
       try{const result=await blobs.getBlob(document.storageKey);if(!result||result.statusCode!==200)return send(res,404,{error:'Document not found.'});
-        res.status(200);res.setHeader('Content-Type',document.mimeType);res.setHeader('Content-Length',String(document.sizeBytes));
+        res.status(200);res.setHeader('Content-Type',document.mimeType);
         res.setHeader('Content-Disposition',`${route==='download'?'attachment':'inline'}; filename="${safeName(document.filename)}"; filename*=UTF-8''${encodedName(document.filename)}`);
-        return Readable.fromWeb(result.stream).pipe(res);
-      }catch(error){logError('Document delivery failed:',error);return send(res,500,{error:route==='download'?'Download failed.':'Document could not be opened.'});}
+        await pipeline(Readable.fromWeb(result.stream),res);return undefined;
+      }catch(error){logError('Document delivery failed:',error);if(res.headersSent){res.destroy?.();return undefined;}return send(res,500,{error:route==='download'?'Download failed.':'Document could not be opened.'});}
     }
     if(route==='item'&&req.method==='DELETE'){
       if(!hasValidOrigin(req))return send(res,403,{error:'Request origin could not be verified.'});

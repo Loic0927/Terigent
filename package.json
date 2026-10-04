@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "node --test",
-    "verify:ui": "node scripts/verify-ui.mjs"
+    "verify:ui": "node scripts/verify-ui.mjs",
+    "verify:images": "node scripts/verify-image-preview.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.0",
