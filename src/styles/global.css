@@ -86,3 +86,6 @@
 
 .admin-project-link{margin-left:auto}.client-editor{display:flex;flex-direction:column}.client-editor .project-form{flex:1}.client-actions{grid-column:1/-1;align-self:end}.project-list-heading{margin-bottom:24px}.project-list-heading form{flex:1;justify-content:flex-end}.project-list-heading form input{flex:1;min-width:300px;max-width:430px}.project-form input:disabled,.staff-progress input:disabled{background:#efede7;color:var(--muted);cursor:not-allowed}.project-grid{clear:both}
 @media(max-width:650px){.admin-project-link{width:100%;margin-top:8px}.project-list-heading{margin-bottom:26px}.project-list-heading form{padding-bottom:4px}.project-list-heading form .button{margin-bottom:2px}.client-actions{grid-column:auto;width:100%}.client-actions .button{margin-left:auto}}
+
+.project-list-heading form select{flex:0 0 165px;width:165px}.project-list-heading form .button{flex:0 0 auto}.project-list-heading form,.project-list-heading form>*{min-width:0}
+@media(max-width:800px){.project-list-heading form{width:100%;max-width:100%}.project-list-heading form input{width:100%;min-width:0;max-width:none}.project-list-heading form select{width:100%;min-width:0}.project-list-heading form .button{width:100%;max-width:100%}}
