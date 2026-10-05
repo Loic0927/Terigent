@@ -1,6 +1,12 @@
 export const PROJECT_STATUSES = ['not-started', 'in-progress', 'completed', 'on-hold'];
 const id = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 const string = (value, max, required = false) => typeof value === 'string' && (!required || value.trim()) && value.trim().length <= max;
+export function normalizedProgress(status, progress, currentProgress = progress) {
+  if (status === 'not-started') return 0;
+  if (status === 'completed') return 100;
+  if (status === 'on-hold') return currentProgress;
+  return progress;
+}
 
 export function validateClient(body) {
   const errors = {};
@@ -22,7 +28,7 @@ export function validateProject(body) {
   if (!Number.isInteger(body?.progress) || body.progress < 0 || body.progress > 100) errors.progress = 'Progress must be an integer from 0 to 100.';
   if (!id(body?.clientId)) errors.clientId = 'Select a valid client.';
   if (!Array.isArray(body?.memberIds) || body.memberIds.length > 100 || new Set(body.memberIds.map(String)).size !== body.memberIds.length || body.memberIds.some(value => !id(value))) errors.memberIds = 'Select valid, unique team members.';
-  return Object.keys(errors).length ? { valid: false, errors } : { valid: true, data: { name: body.name.trim(), description: (body.description || '').trim(), status: body.status, progress: body.progress, clientId: String(body.clientId), memberIds: body.memberIds.map(String) } };
+  return Object.keys(errors).length ? { valid: false, errors } : { valid: true, data: { name: body.name.trim(), description: (body.description || '').trim(), status: body.status, progress: normalizedProgress(body.status, body.progress), clientId: String(body.clientId), memberIds: body.memberIds.map(String) } };
 }
 
 export function validateStaffProgress(body) {
