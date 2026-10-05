@@ -73,6 +73,14 @@ test('role revocation is effective on the next request and unauthenticated diffe
   role = null; assert.equal((await call(handler, 'POST', service)).statusCode, 401);
 });
 
+test('assigned project members cannot be deleted silently', async () => {
+  const conflict = Object.assign(new Error('foreign key conflict'), { code: '23503' });
+  const handler = createAdminUsersHandler({ listDocumentKeys: async () => [], deleteUser: async () => { throw conflict; } }, authorization('root'));
+  const result = await call(handler, 'DELETE', { id: '12' });
+  assert.equal(result.statusCode, 409);
+  assert.match(result.payload.error, /assigned to a project/i);
+});
+
 test('role migration is safe, constrained, and defaults existing and new users to user', async () => {
   const sql = await readFile(new URL('../db/migrations/007_add_user_roles.sql', import.meta.url), 'utf8');
   assert.match(sql, /ADD COLUMN IF NOT EXISTS role/);

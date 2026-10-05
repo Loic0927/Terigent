@@ -1,5 +1,10 @@
 {
   "rewrites": [
+    { "source": "/api/clients/:id", "destination": "/api/customer-requests?managementRoute=client-item&id=:id" },
+    { "source": "/api/clients", "destination": "/api/customer-requests?managementRoute=clients" },
+    { "source": "/api/projects/assignees", "destination": "/api/customer-requests?managementRoute=staff" },
+    { "source": "/api/projects/:id", "destination": "/api/customer-requests?managementRoute=project-item&id=:id" },
+    { "source": "/api/projects", "destination": "/api/customer-requests?managementRoute=projects" },
     { "source": "/api/tasks/:id/documents/:documentId", "destination": "/api/tasks?taskRoute=attachments&id=:id&documentId=:documentId" },
     { "source": "/api/tasks/:id/documents", "destination": "/api/tasks?taskRoute=attachments&id=:id" },
     { "source": "/api/tasks/:id", "destination": "/api/tasks?taskRoute=item&id=:id" },
@@ -17,6 +22,8 @@
     { "source": "/account", "destination": "/index.html" },
     { "source": "/account/", "destination": "/index.html" },
     { "source": "/dashboard", "destination": "/index.html" },
-    { "source": "/dashboard/", "destination": "/index.html" }
+    { "source": "/dashboard/", "destination": "/index.html" },
+    { "source": "/projects", "destination": "/index.html" },
+    { "source": "/projects/", "destination": "/index.html" }
   ]
 }

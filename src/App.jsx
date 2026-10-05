@@ -11,6 +11,7 @@ import Services from './components/Services';
 import Admin from './components/Admin';
 import { Account, AuthPage } from './components/MemberAuth';
 import MemberLayout from './components/MemberLayout';
+import ProjectManagement from './components/ProjectManagement';
 
 export default function App() {
   if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') return <Admin />;
@@ -18,6 +19,7 @@ export default function App() {
   if (/^\/login\/?$/.test(window.location.pathname)) return <AuthPage mode="login" />;
   if (/^\/account\/?$/.test(window.location.pathname)) return <Account />;
   if (/^\/dashboard\/?$/.test(window.location.pathname)) return <MemberLayout active="dashboard">{user => <TaskBoard user={user} />}</MemberLayout>;
+  if (/^\/projects\/?$/.test(window.location.pathname)) return <ProjectManagement />;
   return <>
     <Announcements />
     <Navbar />

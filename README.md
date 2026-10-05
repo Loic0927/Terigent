@@ -94,6 +94,16 @@ Contact inquiries are stored in the `inquiries` table created by `db/migrations/
 
 ## Shared architecture and database
 
+## Task 11 - Client project management
+
+- Root-only client CRUD and project CRUD with safe restricted client deletion
+- Normalized `clients`, `projects`, and `project_members` tables with multi-member assignment
+- Root project search, status filtering, progress tracking, client selection, and staff assignment
+- Staff dashboard limited to assigned projects; staff may update only status and progress
+- Server-side session, role, assignment, input, CSRF, and SQL ownership enforcement
+- Consolidated routes through the existing customer-request Function gateway, retaining 12 Vercel Functions
+- Apply `db/migrations/011_create_clients_and_projects.sql` after migration 010
+
 ## Task 10 - File and document management
 
 - Authenticated member-only image/PDF upload, paginated listing, private preview, download, and retryable deletion
@@ -144,6 +154,7 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/007_add_user_roles.sq
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/008_reconcile_user_tasks.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/009_create_documents.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/010_create_task_documents.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/011_create_clients_and_projects.sql
 ```
 
 If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.

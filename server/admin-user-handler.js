@@ -41,6 +41,6 @@ export function createAdminUsersHandler(repository, authorize = requirePermissio
       }
       const user = await repository.deleteUser(id);
       return user ? send(res, 200, { message: 'User deleted.' }) : send(res, 404, { error: 'Eligible user not found.' });
-    } catch (error) { console.error('User management failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'The user could not be changed right now.' }); }
+    } catch (error) { if (error?.code === '23503') return send(res, 409, { error: 'This user is assigned to a project and cannot be deleted until the assignment is removed.' }); console.error('User management failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'The user could not be changed right now.' }); }
   };
 }
