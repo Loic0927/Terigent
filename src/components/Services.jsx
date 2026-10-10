@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { HiOutlineArrowPath, HiOutlineMagnifyingGlass, HiOutlineSparkles, HiOutlineXMark } from 'react-icons/hi2';
+import { HiOutlineMagnifyingGlass, HiOutlineSparkles, HiOutlineXMark } from 'react-icons/hi2';
+import { showNotification } from './notifications';
 
 async function requestServices(filters, signal) {
   const parameters = new URLSearchParams({ sort: filters.sort, page: String(filters.page) });
@@ -32,6 +33,7 @@ export default function Services() {
     }, filters.q ? 250 : 0);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [filters]);
+  useEffect(() => { if (state.status === 'error') showNotification(state.error, { type: 'error', actionLabel: 'Try again', onAction: load }); }, [load, state.error, state.status]);
 
   const setFilter = (name, value) => setFilters(current => ({ ...current, [name]: value, page: 1 }));
   const clear = () => setFilters({ q: '', category: '', sort: 'updated_desc', page: 1 });
@@ -46,7 +48,6 @@ export default function Services() {
       {hasFilters && <button type="button" className="service-clear" onClick={clear}><HiOutlineXMark /> Clear</button>}
     </form>
     {state.status === 'loading' && <p className="services-state" role="status">Searching services...</p>}
-    {state.status === 'error' && <div className="services-state error" role="alert"><p>{state.error}</p><button className="button button-ghost button-small" onClick={load}><HiOutlineArrowPath /> Try again</button></div>}
     {state.status === 'ready' && !state.items.length && <div className="services-state"><p>No services match these search filters.</p>{hasFilters && <button type="button" className="button button-ghost button-small" onClick={clear}>Clear filters</button>}</div>}
     {state.status === 'ready' && state.pagination && <p className="service-result-count" aria-live="polite">{state.pagination.total} {state.pagination.total === 1 ? 'service' : 'services'} found</p>}
     {state.status === 'ready' && <div className="service-grid">{state.items.map(item => <article className="service-card" key={item.id}><span className="service-icon"><HiOutlineSparkles /></span><p className="service-category">{item.category}</p><h3>{item.name}</h3><p className="service-description">{item.description}</p>{item.pricingText && <p className="service-price">{item.pricingText}</p>}<p className="service-updated">Updated {new Date(item.updatedAt).toLocaleDateString()}</p>{item.matches?.length > 0 && <div className="service-matches"><strong>Why this matched</strong>{item.matches.map(match => <p key={match.field}><span>{match.field}</span> {match.snippet}</p>)}</div>}</article>)}</div>}

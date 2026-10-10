@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { HiOutlineXMark } from 'react-icons/hi2';
+import { showNotification } from './notifications';
 
 const empty = { title: '', description: '', status: 'not-started', priority: 'Medium', deadline: '', reminder: 'No reminder', projectId: '', assigneeUserId: '' };
 const reminders = ['No reminder', '10 minutes before', '1 hour before', '1 day before', '3 days before', '1 week before'];
@@ -24,14 +25,15 @@ export default function TaskForm({ task, options = { projects: [], staff: [], al
     if (!options.allowPersonal && !form.projectId) nextErrors.projectId = 'Choose one of your assigned projects.';
     if (Array.from(form.title.trim()).length > 80) nextErrors.title = 'Keep the title within 80 characters.';
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length) return;
+    if (Object.keys(nextErrors).length) { showNotification('Please correct the highlighted fields.', { type: 'error' }); return; }
     setSending(true);
     try {
       await onSave({ ...form, projectId: form.projectId || null, assigneeUserId: form.assigneeUserId || null, title: form.title.trim(), description: form.description.trim() });
       onClose();
     } catch (error) {
       if (error.status === 401) { window.location.replace('/login?returnTo=%2Fdashboard'); return; }
-      setErrors(error.fields && Object.keys(error.fields).length ? error.fields : { form: error.message });
+      showNotification(error.message, { type: 'error' });
+      setErrors(error.fields && Object.keys(error.fields).length ? error.fields : {});
       setSending(false);
     }
   };
@@ -47,7 +49,6 @@ export default function TaskForm({ task, options = { projects: [], staff: [], al
         <label>Reminder<select name="reminder" value={form.reminder} onChange={update}>{reminders.map(value => <option key={value}>{value}</option>)}</select></label>
         <label>Project<select name="projectId" required={!options.allowPersonal} value={form.projectId} onChange={update}><option value="">{options.allowPersonal ? 'Personal task' : 'Select an assigned project'}</option>{options.projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>{errors.projectId && <small className="error">{errors.projectId}</small>}</label>
         <label>Assignee<select name="assigneeUserId" value={form.assigneeUserId} onChange={update} disabled={!form.projectId}><option value="">Unassigned</option>{availableStaff.map(member => <option key={`${member.projectId}-${member.id}`} value={member.id}>{member.name}</option>)}</select>{errors.assigneeUserId && <small className="error">{errors.assigneeUserId}</small>}</label>
-        {errors.form && <small className="error full" role="alert">{errors.form}</small>}
         <div className="form-actions full"><button type="button" className="button button-ghost" onClick={onClose} disabled={sending}>Cancel</button><button className="button" type="submit" disabled={sending}>{sending ? 'Saving...' : editing ? 'Save changes' : 'Add task'}</button></div>
       </form>
     </div>

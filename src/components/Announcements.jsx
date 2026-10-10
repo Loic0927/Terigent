@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { HiChevronDown, HiOutlineArrowPath, HiOutlineMegaphone, HiOutlinePencilSquare, HiOutlineWrenchScrewdriver, HiOutlineXMark } from 'react-icons/hi2';
+import { HiChevronDown, HiOutlineMegaphone, HiOutlinePencilSquare, HiOutlineWrenchScrewdriver, HiOutlineXMark } from 'react-icons/hi2';
+import { showNotification } from './notifications';
 
 const formatDate = value => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 const shouldStartOpen = new URLSearchParams(window.location.search).get('openAnnouncements') === '1';
@@ -49,6 +50,7 @@ export default function Announcements() {
     window.addEventListener('pageshow', refreshSession);
     return () => { window.removeEventListener('focus', refreshSession); window.removeEventListener('pageshow', refreshSession); };
   }, [checkSession]);
+  useEffect(() => { if (state.status === 'error') showNotification(state.error || 'Announcements are unavailable.', { type: 'error', actionLabel: 'Try again', onAction: loadAnnouncements }); }, [loadAnnouncements, state.error, state.status]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -72,7 +74,7 @@ export default function Announcements() {
     <div className="announcement-pin-inner">
       <HiOutlineMegaphone aria-hidden="true" />
       {state.status === 'loading' && <span role="status">Loading announcements...</span>}
-      {state.status === 'error' && <><span>Announcements unavailable.</span><button className="announcement-retry" onClick={loadAnnouncements}><HiOutlineArrowPath /> Retry</button></>}
+      {state.status === 'error' && <button ref={triggerRef} className="announcement-pin-trigger" onClick={loadAnnouncements}><strong>Announcements</strong><span>Refresh company updates</span></button>}
       {state.status === 'ready' && !latest && <button ref={triggerRef} className="announcement-pin-trigger" onClick={toggle} aria-expanded={open} aria-controls="announcement-details"><strong>Announcements</strong><span>No announcements yet</span><HiChevronDown className={open ? 'rotated' : ''} /></button>}
       {latest && <button ref={triggerRef} className="announcement-pin-trigger" onClick={toggle} aria-expanded={open} aria-controls="announcement-details">
         <strong>Announcements</strong><span>{latest.title}</span><b>{state.items.length}</b><HiChevronDown className={open ? 'rotated' : ''} aria-hidden="true" />
@@ -81,7 +83,6 @@ export default function Announcements() {
     {open && <div className="announcement-popover" id="announcement-details" aria-label="All announcements">
       <div className="announcement-popover-heading"><div><span>Company updates</span><h2>Announcements <small>{state.items.length}</small></h2></div><div className="announcement-heading-actions">{authenticated && <a href="/admin"><HiOutlineWrenchScrewdriver /> Manage announcements</a>}<button ref={closeRef} onClick={close} aria-label="Close announcements"><HiOutlineXMark /></button></div></div>
       {state.status === 'loading' && !state.items.length && <p role="status">Loading announcements...</p>}
-      {state.status === 'error' && <div className="announcement-panel-state" role="alert"><span>{state.error}</span><button className="announcement-retry" onClick={loadAnnouncements}><HiOutlineArrowPath /> Retry</button></div>}
       {state.status === 'ready' && !state.items.length && <p className="announcement-panel-state">No announcements yet.</p>}
       <div className="announcement-popover-list">{state.items.map(item => <article className="announcement-popover-card" key={item.id}>
         <div className="announcement-card-heading"><h3>{item.title}</h3>{authenticated && <a href={`/admin?edit=${encodeURIComponent(item.id)}`}><HiOutlinePencilSquare /> Edit</a>}</div>

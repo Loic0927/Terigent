@@ -4,6 +4,7 @@ import memberRequest from './memberRequest';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
 import DocumentManager from './DocumentManager';
+import { showNotification } from './notifications';
 
 const columns = [['not-started', 'Not Started'], ['in-progress', 'In Progress'], ['completed', 'Completed']];
 const taskData = task => ({ title: task.title, description: task.description, status: task.status, priority: task.priority, deadline: task.deadline, reminder: task.reminder, projectId: task.projectId || null, assigneeUserId: task.assigneeUserId || null });
@@ -27,6 +28,7 @@ export default function TaskBoard({ user }) {
     });
     return () => { current = false; setTasks([]); };
   }, []);
+  useEffect(() => { if (state.error) showNotification(state.error, { type: 'error' }); }, [state.error]);
   const save = async form => {
     if (editor === 'new') {
       const payload = await memberRequest('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
@@ -55,7 +57,6 @@ export default function TaskBoard({ user }) {
     <div className="board-intro"><div><p className="eyebrow"><span /> CUSTOMER DASHBOARD</p><h1>Welcome, <em>{user.name}.</em></h1><p>Keep your work moving from first thought to finished task. Reminder choices are saved for planning reference only.</p></div><button className="button" onClick={() => setEditor('new')}><HiOutlinePlus /> Add task</button></div>
     <section className="dashboard-profile" aria-label="Account summary"><div><span>Full name</span><strong>{user.name}</strong></div><div><span>Email address</span><strong>{user.email}</strong></div><div><span>Customer since</span><strong>{new Date(user.createdAt).toLocaleDateString()}</strong></div><a className="button button-ghost" href="/account">Manage account</a></section>
     <DocumentManager onDocumentDeleted={documentDeleted} />
-    {state.error && <p className="auth-notice error" role="alert">{state.error}</p>}
     {state.loading ? <p role="status">Loading your tasks...</p> : <div className="task-board">{columns.map(([status, label]) => { const items = tasks.filter(task => task.status === status); return <div className={`board-column ${status}`} key={status}><div className="column-title"><div><span /><h3>{label}</h3></div><b>{items.length}</b></div><div className="task-list">{items.map(task => <TaskCard key={task.id} task={task} onStatus={updateStatus} onDelete={remove} onEdit={setEditor} onAttachments={updateAttachments} />)}{!items.length && <div className="empty-column">{tasks.length ? 'No tasks here yet.' : 'Add your first task to get started.'}</div>}</div></div>; })}</div>}
     {editor && <TaskForm task={editor === 'new' ? null : editor} options={options} onSave={save} onClose={() => setEditor(null)} />}
   </div></section></main>;

@@ -90,3 +90,15 @@
 .project-list-heading form select{flex:0 0 165px;width:165px}.project-list-heading form .button{flex:0 0 auto}.project-list-heading form,.project-list-heading form>*{min-width:0}
 @media(max-width:800px){.project-list-heading form{width:100%;max-width:100%}.project-list-heading form input{width:100%;min-width:0;max-width:none}.project-list-heading form select{width:100%;min-width:0}.project-list-heading form .button{width:100%;max-width:100%}}
 .task-card-actions{display:flex;align-items:center;gap:3px}
+
+/* Floating notifications */
+.notification-center{position:fixed;z-index:120;top:22px;right:22px;display:grid;width:min(390px,calc(100vw - 32px));gap:10px;pointer-events:none}
+.notification-toast{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:11px;padding:14px 14px 14px 16px;border:1px solid #d8d4ca;border-left:4px solid var(--blue);border-radius:8px;background:var(--cream);color:var(--ink);box-shadow:0 14px 38px rgba(12,22,38,.2);pointer-events:auto;animation:notification-in .2s ease-out}
+.notification-toast.success{border-left-color:#4e947f}.notification-toast.error{border-left-color:#b74638}.notification-toast.info{border-left-color:var(--blue)}
+.notification-toast p{margin:0;font-size:.86rem;line-height:1.45;overflow-wrap:anywhere}.notification-icon{font-size:1.35rem;color:var(--blue)}.notification-toast.success .notification-icon{color:#4e947f}.notification-toast.error .notification-icon{color:#b74638}
+.notification-action,.notification-close{border:0;background:transparent;color:inherit;cursor:pointer}.notification-action{padding:6px;color:var(--coral);font-weight:800}.notification-close{display:grid;place-items:center;width:30px;height:30px;padding:0;border-radius:4px;font-size:1.2rem}.notification-close:hover{background:#efebe3}
+@keyframes notification-in{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}
+@media(max-width:600px){.notification-center{top:12px;right:16px;left:16px;width:auto}.notification-toast{grid-template-columns:auto minmax(0,1fr) auto}.notification-action{grid-column:2}.notification-close{grid-column:3;grid-row:1}}
+
+/* Keep the smaller client editor independent from the taller project form. */
+.project-editors{align-items:start}.client-editor{align-self:start;padding:26px}.client-editor .project-form{flex:none;gap:12px}.client-editor .project-form input{padding:10px}.client-editor .project-actions{margin-top:4px}

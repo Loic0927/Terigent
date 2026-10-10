@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { HiArrowRight, HiCheck } from 'react-icons/hi2';
+import { useEffect, useState } from 'react';
+import { HiArrowRight } from 'react-icons/hi2';
+import { showNotification } from './notifications';
 
 const INITIAL_FORM = { fullName: '', email: '', subject: '', details: '', website: '' };
 const LIMITS = { fullName: 100, email: 254, subject: 150, details: 5000 };
@@ -20,6 +21,7 @@ export default function Contact() {
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle');
   const [notice, setNotice] = useState('');
+  useEffect(() => { if (notice) showNotification(notice, { type: status === 'error' ? 'error' : 'success' }); }, [notice, status]);
 
   const update = event => {
     const { name, value } = event.target;
@@ -61,7 +63,6 @@ export default function Contact() {
         <div className="contact-honeypot" aria-hidden="true"><label htmlFor="contact-website">Website</label><input id="contact-website" name="website" tabIndex="-1" autoComplete="off" value={form.website} onChange={update} /></div>
       </div>
       <div className="contact-submit"><button className="button" type="submit" disabled={status === 'sending'}>{status === 'sending' ? 'Submitting...' : <>Submit request <HiArrowRight /></>}</button><small>We only use your details to handle this request.</small></div>
-      {notice && <div className={`form-notice ${status}`} role={status === 'error' ? 'alert' : 'status'}>{status === 'success' && <HiCheck />}<span>{notice}</span></div>}
     </form>
   </div></section>;
 }
