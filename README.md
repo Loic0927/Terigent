@@ -1,147 +1,120 @@
 # Terigent
 
-Terigent is a responsive React/Vite full-stack project with database-backed member authentication, customer task management, service requests, and role-based administration.
+Terigent is a responsive full-stack work and service management application. It combines a public company website, contact and service-request flows, member accounts, private documents, project-scoped task management, and role-based company administration.
 
-## Task 1 - Responsive task-management interface
+## Project overview
 
-- Responsive landing page for desktop and mobile
-- Authenticated three-column task board for not started, in-progress, and completed work
-- Add, move, complete, reopen, and remove member-owned tasks
-- Priority, deadline, reminder, assignee, and project information
-- PostgreSQL persistence isolated by member account
+The frontend is a React single-page application built by Vite. Server-side APIs run as Vercel Node.js Functions and store application data in PostgreSQL. Private file bytes are stored in a Private Vercel Blob store; only metadata and opaque storage keys are stored in PostgreSQL.
 
-The public homepage contains the product presentation. The interactive task board is available only in the authenticated member workspace and does not import the former anonymous browser demo data.
+The application supports four access contexts:
 
-## Task 2 - Contact inquiry system
+- Visitors can browse announcements and services and submit contact or service requests.
+- Members can manage their account, personal tasks, documents, and task attachments.
+- Staff can manage services and announcements and access only projects and project tasks assigned to them.
+- Root can manage company content, users, customer requests, clients, projects, team assignments, and all database-backed project tasks.
 
-- Contact form with name, email, subject, and message fields
-- Client- and server-side validation with clear errors and field limits
-- PostgreSQL persistence through `POST /api/contact`
-- Sending, success, reset, and safe failure states
-- Honeypot protection, request-size limits, rate limiting, and parameterized SQL
+The environment-credential administrator is a secure Root fallback for company administration. A database-backed Root member is required for member-workspace actions that need an owning user ID, such as creating a Task.
 
-Contact inquiries are stored in the `inquiries` table created by `db/migrations/001_create_inquiries.sql`.
+## Main features
 
-## Task 3 - Internal content management
+- Responsive landing page, navigation, feature sections, service catalogue, benefits, and contact form
+- Public announcements with Root/Staff create, edit, and delete management
+- Public services with keyword search, category filtering, updated-time sorting, and pagination
+- Member registration, login, logout, seven-day database sessions, and profile editing
+- Customer task board with create, edit, status transitions, reopen, delete, project selection, staff assignment, and attachments
+- Private JPG, PNG, WebP, and PDF upload, preview, download, pagination, and retryable deletion
+- Public customer requests with Root-only filtering, pagination, details, and status management
+- Root-only user search, pagination, Staff grant/revoke, and retryable deletion cleanup
+- Root-only Client CRUD and Project CRUD, search, status filters, pagination, progress, and Staff assignment
+- Staff project and Task access enforced by `project_members` in server-side SQL
+- Centralized structured error logging that excludes exception messages, stack traces, connection strings, cookies, tokens, and file URLs
 
-### Features
+## Technologies used
 
-- A pinned public announcement bar that opens a scrollable list of every announcement, newest first
-- Administrator UI at `/admin` for creating, editing, and deleting announcements
-- Signed-in administrators can manage announcements or open a specific announcement editor directly from the public list
-- Public `GET /api/announcements`; authenticated `POST /api/announcements`, `PATCH /api/announcements/:id`, and `DELETE /api/announcements/:id`
-- Server-verified, eight-hour HMAC session in an HttpOnly, SameSite=Strict cookie (Secure in production)
-- Origin validation on login, logout, and every announcement mutation
-- Passwords are verified using Node.js `crypto.scrypt`; the production password hash and session secret remain in Vercel environment variables
-- PostgreSQL-backed login throttling: five failed attempts per hashed IP-and-username key in 15 minutes
-- Parameterized PostgreSQL queries, server-side validation, safe errors, and plain-text React rendering
+- React and React DOM
+- Vite
+- Plain CSS and React Icons
+- Vercel Node.js Functions
+- PostgreSQL through `pg`
+- Private Vercel Blob through `@vercel/blob`
+- Busboy, `file-type`, and Sharp for upload validation
+- Node.js test runner, ESLint, and Playwright Core
 
-## Task 4 - Member registration and authentication
+## Project structure
 
-- `/register`, `/login`, protected `/dashboard`, and `/account` pages
-- Member APIs at `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, and `/api/auth/me`
-- Server validation, normalized case-insensitive email uniqueness, salted scrypt password hashes, opaque seven-day sessions, trusted-origin CSRF checks, and PostgreSQL-backed throttling
-- Member cookie `terigent_user_session` and database sessions are fully separate from the Task 3 administrator cookie and `/api/admin/auth/*`; members cannot authorize announcement writes
+```text
+api/                 Vercel Function entrypoints (12 total)
+server/              handlers, repositories, validation, auth, RBAC, logging
+src/                 React application and CSS
+db/migrations/       ordered PostgreSQL migrations
+tests/               isolated handler, security, RBAC, and migration tests
+scripts/             credential and local UI verification utilities
+artifacts/ui/        existing responsive verification screenshots
+```
 
-## Task 5 - Customer dashboard and account
+Do not add another file-based entrypoint below `api/` without consolidating an existing route. The repository currently has exactly **12 Vercel Functions**, which is the Hobby file-based Functions limit. Rewrites in `vercel.json` route multiple public URLs through the existing gateways and do not create additional entrypoints.
 
-- Protected Customer Dashboard and My Account pages sharing a responsive member header
-- Server-side session lookup for every private request; browser-supplied user IDs are never trusted
-- Database-backed task list, creation, editing, status transitions, reopening, and deletion
-- Task ownership enforced in parameterized SQL so members can access only their own records
-- Allow-listed Not Started, In Progress, and Completed states with validated task metadata
-- Same-origin CSRF checks on every task or profile mutation
-- Safe account-name editing while email, password hashes, and session data remain protected
-- Desktop, tablet, and mobile navigation with long-name handling and no horizontal overflow
+## Requirements
 
-## Task 6 - Company service management
+- Node.js 22.12 or newer, below Node 25
+- npm
+- PostgreSQL
+- `psql` or access to the database provider's SQL editor
+- A Private Vercel Blob store for document integration
 
-- Public, responsive service catalogue on the homepage, loaded from `GET /api/services`
-- Administrator service management integrated into `/admin`
-- Protected list/create/update/delete APIs under `/api/admin/services`
-- Active services are public; hidden and deleted services are excluded automatically
-- PostgreSQL-backed service name, description, category, optional pricing text, availability, and timestamps
-- Allow-listed, size-limited JSON validation, parameterized SQL, admin-session authorization, and same-origin mutation checks
+The supported project version is recorded in `.nvmrc`, and `package.json` declares the compatible Node engine range. The Vercel CLI is pinned in `devDependencies`; do not rely on an unversioned global CLI.
 
-## Task 7 - Customer request management
-
-- Public service-request form with client/server validation, honeypot, size limits, and rate limiting
-- Optional association to an authenticated member; anonymous requests remain supported
-- PostgreSQL-backed requests with New, In Progress, Resolved, and Closed states
-- Administrator-only paginated/filterable list, detail view, and status updates under `/admin`
-- Parameterized SQL, server-side authorization, allow-listed updates, and same-origin mutation protection
-
-## Task 8 - Public service discovery
-
-- Server-backed keyword and category filtering for the public service catalogue
-- Updated-time sorting, pagination, empty states, and responsive search controls
-- Parameterized search queries that keep inactive services private
-- Combined API routing that remains within the Vercel Hobby Functions limit
-
-## Task 9 - Role-based access control
-
-- Centralized `root`, `staff`, and `user` authorization with database-backed member roles
-- Existing environment administrator sessions remain a secure Root fallback
-- Sensitive operations re-read the current database role, so Staff revocation takes effect immediately
-- Root-only Staff/User Management with safe search, role assignment, transactional deletion, and Root protection
-- Root accounts are excluded from the management list and cannot be demoted or deleted through the API
-- Root and Staff have full Service and Announcement CRUD; only Root can manage users and customer requests
-- Announcement Edit deep links from the public homepage load the correct record, focus and scroll to the rendered editor, persist PATCH updates, and safely handle invalid IDs
-- Role-aware public navigation gives Root and Staff one consistent Company Management entry without duplicate member links
-- Admin navigation uses a home-linked logo, one bottom Sign out action, and responsive equal-width action rows
-- HttpOnly cookies, production Secure flags, SameSite policies, CSRF checks, rate limiting, validation, and parameterized SQL remain enforced
-- The API stays at 12 Vercel Functions, within the Hobby limit
-
-## Shared architecture and database
-
-## Task 11 - Client project management
-
-- Root-only client CRUD and project CRUD with safe restricted client deletion
-- Normalized `clients`, `projects`, and `project_members` tables with multi-member assignment
-- Root project search, status filtering, progress tracking, client selection, and staff assignment
-- Staff dashboard limited to assigned projects; staff may update only status and progress
-- Server-side session, role, assignment, input, CSRF, and SQL ownership enforcement
-- Consolidated routes through the existing customer-request Function gateway, retaining 12 Vercel Functions
-- Apply `db/migrations/011_create_clients_and_projects.sql` after migration 010
-
-## Task 10 - File and document management
-
-- Authenticated member-only image/PDF upload, paginated listing, private preview, download, and retryable deletion
-- Server-enforced 3 MiB limit, 30-document quota, upload throttling, extension/MIME/signature checks, image decoding, and 25-megapixel limit
-- Metadata in PostgreSQL migration `db/migrations/009_create_documents.sql`; bytes in a **Private** Vercel Blob store
-- One `/api/documents.js` dispatcher; Tasks were consolidated into `/api/tasks.js`, keeping the deployment at 12 Functions
-- Blob/DB compensation uses pending and cleanup states. PDF structural identification is not antivirus scanning; use a malware scanner if the threat model requires it.
-- Authenticated image previews use the private content route, an in-page object URL, loading/error retry states, keyboard dismissal, and focus restoration; downloads remain separate attachments.
-- Tasks can attach multiple existing ready documents through `task_documents`; removing an attachment keeps the document, while permanent document or task deletion cascades only the relationship.
-
-- Front end: React, Vite, React Icons, plain CSS
-- API: Vercel Node.js Functions under `api/`
-- Database: PostgreSQL through `pg`, using the existing `DATABASE_URL` and `DATABASE_SSL`
-- Migrations: run `001` through `db/migrations/010_create_task_documents.sql` in numeric order
-
-The repository contains no Neon SDK or Neon-specific variable. If the existing `DATABASE_URL` points to Neon, Task 3 uses that same Neon database and pool. For Vercel Functions, use Neon's pooled connection string when available. Migration 002 only creates `announcements` and `admin_login_attempts`; it does not alter or remove `inquiries`.
-
-## Local development
-
-Requirements: Node.js 20.19+ or 22.12+, npm, PostgreSQL, and either `psql` or the provider's SQL editor.
+## Setup and installation
 
 ```powershell
+nvm use
 npm install
 Copy-Item .env.example .env.local
 ```
 
-Fill `.env.local` with a non-production database and administrator values. To generate the password hash and a random session secret without putting the password in PowerShell history:
+If the installed Node version does not match `.nvmrc`, install Node 22.12 before continuing. Never copy Production credentials into a shared Development checkout.
+
+## Environment variables
+
+All variables are server-only. None should use a `VITE_` prefix.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | Yes | PostgreSQL connection string; use a pooled connection for serverless hosting |
+| `DATABASE_SSL` | Yes | `true` for hosted PostgreSQL; `false` only for a local non-TLS database |
+| `ADMIN_USERNAME` | Yes | Environment Root administrator username |
+| `ADMIN_PASSWORD_HASH` | Yes | Scrypt password hash generated by the credential script |
+| `SESSION_SECRET` | Yes | HMAC signing secret for the environment Root session, minimum 32 characters |
+| `BLOB_READ_WRITE_TOKEN` | Documents | Server-only token for the connected Private Vercel Blob store |
+
+`.env.example` contains placeholders only. Never commit `.env`, `.env.local`, real credentials, cookies, database exports, or Blob URLs.
+
+## Root initialization
+
+Generate the environment Root password hash and session secret without placing the password in shell history:
 
 ```powershell
 $securePassword = Read-Host 'Admin password (minimum 12 characters)' -AsSecureString
 $credential = [System.Net.NetworkCredential]::new('', $securePassword)
 $env:ADMIN_PASSWORD = $credential.Password
-node scripts/generate-admin-credentials.mjs
+npm run credentials
 Remove-Item Env:ADMIN_PASSWORD
 Remove-Variable credential, securePassword
 ```
 
-Copy the two output lines into `.env.local`. Set `ADMIN_USERNAME` separately. Do not commit either output. Create schemas in order:
+Add the generated `ADMIN_PASSWORD_HASH` and `SESSION_SECRET` to the target environment and set `ADMIN_USERNAME`. Changing `SESSION_SECRET` invalidates existing environment Root sessions.
+
+The package script is:
+
+```json
+"credentials": "node scripts/generate-admin-credentials.mjs"
+```
+
+If a database-backed Root member is required for `/dashboard` Task operations, first register a dedicated account in a non-production environment, then have a database administrator promote that exact reviewed account to `role='root'` using a parameterized database tool. There is deliberately no public API for granting Root. Root rows are excluded from user management and cannot be demoted or deleted through the application.
+
+## Database migrations
+
+Run every migration once, in numeric order, against the intended database. Use a new local database or isolated Preview branch before Production.
 
 ```powershell
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/001_create_inquiries.sql
@@ -155,93 +128,70 @@ psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/008_reconcile_user_ta
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/009_create_documents.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/010_create_task_documents.sql
 psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/011_create_clients_and_projects.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/012_create_user_deletion_workflow.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/migrations/013_integrate_tasks_projects_staff.sql
 ```
 
-If `DATABASE_URL` is only stored in `.env.local`, load it into the current PowerShell session without printing it, or pass it through your database tool's secure connection UI. For local PostgreSQL without TLS use `DATABASE_SSL=false`; hosted Neon uses `true`.
+Migration 012 adds a retryable member-deletion workflow. A deletion first marks the member `pending`, revokes sessions, records every Blob key, and tracks each completed Blob deletion. Retrying the same Root operation resumes unfinished cleanup before the final database transaction.
 
-Run the front end and Functions together:
+Migration 013 adds `user_tasks.project_id` and `user_tasks.assignee_user_id`. The previous free-text columns remain only as legacy metadata for existing installations; current APIs clear and ignore those values. New authorization and display data use IDs and server-side joins only.
+
+Do not run migrations automatically as part of a Production build. Confirm the selected database/branch and take an appropriate backup before applying Production schema changes.
+
+## Data relationships and authorization
+
+```text
+clients 1 ── * projects
+projects * ── * users(staff) through project_members
+projects 1 ── * user_tasks through project_id
+users(staff) 1 ── * user_tasks through assignee_user_id
+users 1 ── * documents
+user_tasks * ── * documents through task_documents
+```
+
+- Member Tasks without a Project are private to their owner.
+- A regular member cannot attach an arbitrary Project or Staff ID to a Task.
+- Staff can list and mutate their own personal Tasks plus Tasks whose Project is assigned to them through `project_members`.
+- Staff may select only their assigned Projects and active Staff assigned to the same Project.
+- Database-backed Root can access all Tasks and select any Project, but an assignee must still be active Staff assigned to that Project.
+- Task/document/project access is enforced in repositories and handlers; hiding UI controls is not the authorization boundary.
+- Staff assigned to a Project may open documents attached to that Project's Tasks. Document deletion remains owner-only.
+
+## Running locally
+
+Frontend-only development:
+
+```powershell
+npm run dev
+```
+
+This starts Vite only; `/api/*` is not emulated.
+
+Full frontend and Vercel Functions development:
 
 ```powershell
 npx vercel dev
 ```
 
-Open `http://localhost:3000`, then `http://localhost:3000/admin`. Plain `npm run dev` runs Vite only and does not emulate `/api/*`.
+Because `vercel` is pinned in `devDependencies`, `npx` uses the installed project version after `npm install`. Open `http://localhost:3000` and use a non-production PostgreSQL database and Blob store.
 
-## Environment variables
+Main routes:
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | Existing server-side PostgreSQL connection string; prefer a pooled Neon string for Vercel |
-| `DATABASE_SSL` | Yes | `true` for Neon/hosted PostgreSQL; `false` only for a local non-TLS server |
-| `ADMIN_USERNAME` | Yes | Single administrator username |
-| `ADMIN_PASSWORD_HASH` | Yes | `scrypt$...` value generated by the script |
-| `SESSION_SECRET` | Yes | Random signing key generated by the script; minimum 32 characters |
-| `BLOB_READ_WRITE_TOKEN` | Task 10 | Server-only token for the connected **Private** Vercel Blob store; never use a `VITE_` prefix |
+- `/` public site
+- `/register`, `/login`
+- `/dashboard`, `/account`
+- `/admin`
+- `/projects`
 
-None uses a `VITE_` prefix, so none is bundled into browser JavaScript.
+## Private Vercel Blob setup
 
-### Private Vercel Blob setup
+1. Create or connect a **Private** Vercel Blob store.
+2. Enable only the intended Development, Preview, and Production environments.
+3. Keep `BLOB_READ_WRITE_TOKEN` server-side; never use a `VITE_` variable.
+4. Apply migrations 009, 010, 012, and 013 to the matching isolated database as part of the complete ordered migration set.
+5. Test upload, authenticated preview, download, attachment access, deletion retry, and member deletion cleanup in Preview before Production.
 
-1. In the Vercel project open **Storage**, choose **Create Database**, then **Blob**.
-2. Select **Private** access (access cannot be changed later), create the store, and connect it to this project.
-3. Enable the required Production/Preview/Development environments. Vercel injects `BLOB_READ_WRITE_TOKEN`; do not copy it into client code or share it.
-4. Apply migration 009 to the matching non-production Neon branch, deploy a Preview, and run the two-account acceptance checks before Production.
-5. For local integration only, place the private-store token in uncommitted `.env.local` and run `npx vercel dev`.
-
-Without valid `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` values, automated tests cover handlers with in-memory collaborators only; they do not prove real Neon/Blob persistence.
-
-Task 4 adds no environment variables: it reuses `DATABASE_URL` and `DATABASE_SSL`. Run `psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f db/cleanup_auth_records.sql` periodically to remove expired sessions and old rate-limit records.
-
-To change the administrator username or password, generate a new hash, update `ADMIN_USERNAME` and/or `ADMIN_PASSWORD_HASH` in the relevant Vercel environments, then redeploy. Changing `SESSION_SECRET` signs every administrator out; use it for deliberate session invalidation.
-
-## Database migrations with Neon
-
-No new Neon project, paid resource, database, or branch is required. Reuse the Task 2 database for Production. For safety, use separate Neon branches/databases for Preview and Development so test CRUD never changes production.
-
-Run migrations 002 through 008 once against each environment's database, after migration 001. Migration 007 safely backfills existing members to `user` before enforcing its role constraint. Migration 008 safely reconciles the member task table with `IF NOT EXISTS`; neither migration deletes existing data.
-
-Neon SQL Editor alternative:
-
-1. Open the intended Neon project and select the correct branch/database.
-2. Open **SQL Editor**.
-3. Open `db/migrations/002_create_announcements_and_admin_login_attempts.sql` locally, copy its complete contents, paste them into the editor, and run.
-4. Confirm both `announcements` and `admin_login_attempts` exist. Do not run test `DELETE` statements against Production.
-
-## Vercel deployment
-
-1. Before deploying code, create/select separate Preview and Development Neon branches or databases. Keep the existing production database for Production.
-2. Run migrations 001 through 008 in numeric order on a new Preview/Development database. For an existing database already current through Task 7, apply migrations 007 and 008 before deploying the RBAC build.
-3. In Vercel: project → **Settings** → **Environment Variables**, preserve the five existing variables above. Task 4 adds none.
-4. Scope Production to production database/admin values. Scope Preview to the preview database and distinct admin/session values. Scope Development to a local/development database and distinct values. A branch-specific Preview variable can further isolate one branch.
-5. Deploy a Preview (`vercel deploy` or push a non-production branch). Check all implemented tasks documented above.
-6. After Preview passes, ensure migrations 001 through 008 have run on Production, then deploy Production (`vercel deploy --prod` or merge to the production branch).
-
-Environment-variable changes affect only new deployments, so adding or rotating any of these values requires redeployment. Database migration alone does not require redeployment, but deploy only after its target schema is ready.
-
-## Deployment verification
-
-Use the Preview URL first, then repeat on the production URL without destructive production test data unless approved:
-
-1. Open `/` and verify the announcement section loads for a signed-out visitor.
-2. In a private window, call/open `/api/announcements`; expect `200` JSON.
-3. Attempt `POST /api/announcements` without a session; expect `401`.
-4. Open `/admin`, sign in, create a short uniquely named announcement, and confirm it appears in the list.
-5. Open `/` in another tab, reload, and confirm the same announcement appears newest first.
-6. Edit it in `/admin`, reload the public page, and confirm content and updated time change.
-7. Delete it after the confirmation dialog and confirm it disappears publicly.
-8. Submit the customer request form as a guest and confirm a `New` record appears in `customer_requests` in a non-production environment.
-9. Sign out, reload `/admin`, and confirm editing controls require login again.
-10. Open `/register`, create a unique member account, and confirm the success message appears on `/login`.
-11. Sign in, confirm `/account` shows the correct name, email, and creation time, then refresh to verify the session persists.
-12. Sign out and confirm `/account` redirects to `/login`. Re-send the old cookie only in a safe test environment and confirm `/api/auth/me` returns `401`.
-13. While signed in only as a member, attempt announcement `POST`, `PATCH`, and `DELETE`; each must return `401`, while public announcements and customer request submission remain available.
-14. Submit another customer request while signed in as a member and confirm it is associated with that member.
-15. Sign in at `/admin`, filter customer requests, open the details, and update the request through all supported statuses.
-16. Promote a test member to Staff, sign in as that member, and verify Service and Announcement create/edit/delete are available while Users and Customer Requests remain hidden and return `403` when called directly.
-17. Open an Announcement Edit link from the public homepage and verify the correct editor is focused, the PATCH persists, Cancel does not mutate data, and an invalid ID shows a safe message.
-18. At 320, 360, 390, 768, 1024, 1280, and 1440 pixels, confirm the public/member/Admin headers and action rows have no overlap or horizontal overflow.
-
-The UI prevents blank/overlong input. Automated handler tests also cover blank values, 101-character titles, invalid IDs, missing rows, unauthorized writes, cross-origin writes, and logout.
+Uploads are limited to 3 MiB and 30 tracked documents per member. The server validates filename, declared MIME type, detected signature, supported image decoding, and image pixel count. PDF signature checking is not antivirus scanning.
 
 ## Quality checks
 
@@ -249,21 +199,37 @@ The UI prevents blank/overlong input. Automated handler tests also cover blank v
 npm run lint
 npm test
 npm run build
-npm run verify:ui
+npm run verify:images
 ```
 
-API tests use injected repositories and do not touch a real database. Live persistence must be verified against a safe Development/Preview database after migration.
+`npm run verify:images` uses intercepted local APIs and does not contact a real Blob store. `npm run verify:ui` writes responsive screenshots into `artifacts/ui/`; run it only when updating those tracked artifacts intentionally.
 
-The Playwright verification also covers Announcement deep-link editing, Root/Staff navigation, one bottom-only Admin sign-out action, mobile two-column action layouts, and responsive screenshots in `artifacts/ui/`.
+Unit and handler tests use injected repositories and do not prove real PostgreSQL, Vercel rewrites, or Blob persistence. Complete those checks in an isolated Development or Preview environment.
 
-## Troubleshooting and logs
+## Deployment
 
-- Login failure: confirm all three admin variables are set in the environment of the deployment being visited, then redeploy. Five failures for the same hashed IP/username key cause a 15-minute cooldown stored in PostgreSQL.
-- Database connection or API 500: confirm `DATABASE_URL`, `DATABASE_SSL=true`, the correct Neon branch, and migration 002. Do not paste connection strings into tickets, screenshots, chat, or logs.
-- Dashboard logs: Vercel project → deployment → **Logs**, filter to Functions and `/api/auth/*` or `/api/announcements*`. The application logs only short operation labels and error messages; still redact URLs, hostnames, usernames, SQL, cookies, and credentials before sharing.
-- CLI logs: `vercel logs --deployment <deployment-id> --level error` for Preview, or `vercel logs --environment production --level error --since 5m` for recent Production errors.
-- A `500` from `/api/announcements` immediately after deployment usually means migration 002 has not run on the exact database selected by that deployment environment.
+1. Install with the committed lockfile: `npm ci`.
+2. Confirm the deployment uses a Node version allowed by `package.json` and compatible with `.nvmrc`.
+3. Create/select isolated Preview PostgreSQL and Private Blob resources.
+4. Apply migrations 001 through 013 in order to Preview.
+5. Configure only the environment-variable names listed above with environment-specific values.
+6. Deploy Preview and run the acceptance checks below.
+7. Apply the same reviewed migrations to Production only after Preview passes and a backup/change plan is approved.
+8. Deploy Production without creating additional Function entrypoints.
 
-## Test accounts
+## Preview acceptance checks
 
-Create member test accounts through `/register`; no shared member password is committed. Keep administrator credentials environment-only.
+- Visitor: announcements, service search/sort/pages, contact, and customer request flows
+- Member: registration, login, refresh persistence, account edit, logout, personal Task CRUD/edit, files, previews, downloads, and attachments
+- Staff A: only assigned Projects and their Tasks are visible and editable
+- Staff B: direct Project, Task, and attachment IDs belonging only to Staff A return 403/404
+- Root: Services, Announcements, Requests, Users, Clients, Projects, assignments, filters, and pagination
+- Member deletion: assigned Staff is rejected; Blob cleanup failure returns pending; retry completes without orphaning state
+- Session expiry: private screens redirect or show a clear sign-in error
+- Responsive layout: 320, 360, 390, 768, 1024, 1280, and 1440 pixel widths, including `/projects`
+
+## Maintenance
+
+Expired sessions and old authentication attempts can be removed with `db/cleanup_auth_records.sql` against the explicitly selected environment. Do not run cleanup scripts against Production without approval and a verified target.
+
+Server errors are logged through `server/logger.js`. Logs contain only an operation identifier, safe error type/code, and request ID. Do not add raw exception messages, stacks, cookies, tokens, database URLs, Blob URLs, form bodies, or filenames to logs.

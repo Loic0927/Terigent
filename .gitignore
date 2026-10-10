@@ -3,6 +3,8 @@ node_modules/
 
 # Production build
 dist/
+coverage/
+*.log
 
 # Environment variables
 .env
@@ -11,6 +13,7 @@ dist/
 
 # Editor settings
 .vscode/
+.vercel/
 
 # Operating system files
 .DS_Store

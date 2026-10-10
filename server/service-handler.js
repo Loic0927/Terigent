@@ -2,6 +2,7 @@ import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
 import { requirePermission } from './rbac.js';
 import { validatePublicServiceQuery, validateService } from './service-validation.js';
+import { logServerError } from './logger.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 const isJson = req => String(req.headers?.['content-type'] || '').toLowerCase().split(';')[0].trim() === 'application/json';
@@ -37,7 +38,7 @@ export function createPublicServicesHandler(repository) {
       });
     }
     catch (error) {
-      console.error('Public service list failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError('services.public.list', error, req);
       return send(res, 500, { error: 'Services could not be loaded right now.' });
     }
   };
@@ -51,7 +52,7 @@ export function createAdminServicesHandler(repository, authorize = requirePermis
       res.setHeader('Cache-Control', 'no-store');
       try { return send(res, 200, { services: await repository.listAdminServices() }); }
       catch (error) {
-        console.error('Admin service list failed:', error instanceof Error ? error.message : 'Unknown error');
+        logServerError('services.admin.list', error, req);
         return send(res, 500, { error: 'Services could not be loaded right now.' });
       }
     }
@@ -60,7 +61,7 @@ export function createAdminServicesHandler(repository, authorize = requirePermis
     if (!data) return undefined;
     try { return send(res, 201, { service: await repository.createService(data) }); }
     catch (error) {
-      console.error('Service creation failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError('services.admin.create', error, req);
       return send(res, 500, { error: 'The service could not be created right now.' });
     }
   };
@@ -82,7 +83,7 @@ export function createAdminServiceItemHandler(repository, authorize = requirePer
       const updated = await repository.updateService(id, data);
       return updated ? send(res, 200, { service: updated }) : send(res, 404, { error: 'Service not found.' });
     } catch (error) {
-      console.error('Service mutation failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError(`services.admin.${req.method === 'DELETE' ? 'delete' : 'update'}`, error, req);
       return send(res, 500, { error: 'The service could not be changed right now.' });
     }
   };

@@ -3,6 +3,7 @@ import { clearSessionCookie, createSession, hasValidOrigin, isAdmin, sessionCook
 import { clientIp, parseBody, send } from './http.js';
 import { verifyPassword } from './password.js';
 import { getAuthenticatedPrincipal, permissionsFor } from './rbac.js';
+import { logServerError } from './logger.js';
 
 function attemptKey(req, username) {
   return createHash('sha256').update(`${clientIp(req)}\n${username.toLowerCase()}`).digest('hex');
@@ -29,7 +30,7 @@ export function createLoginHandler(repository) {
       res.setHeader('Set-Cookie', sessionCookie(createSession(username)));
       return send(res, 200, { authenticated: true, username });
     } catch (error) {
-      console.error('Administrator login failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError('auth.admin.login', error, req);
       return send(res, 500, { error: 'Sign-in is temporarily unavailable.' });
     }
   };
@@ -45,7 +46,7 @@ export function sessionHandler(req, res) {
     if (!['root', 'staff'].includes(principal.role)) return send(res, 403, { authenticated: false, error: 'Administrator access is not permitted.' });
     return send(res, 200, { authenticated: true, role: principal.role, permissions: permissionsFor(principal.role) });
   } catch (error) {
-    console.error('Administrator session check failed:', error instanceof Error ? error.message : 'Unknown error');
+    logServerError('auth.admin.session', error, req);
     return send(res, 500, { authenticated: false, error: 'Session verification is temporarily unavailable.' });
   } })();
 }

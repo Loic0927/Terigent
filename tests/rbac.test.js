@@ -48,7 +48,7 @@ test('staff cannot view customer requests', async () => {
 
 test('user-management API is root-only and rejects root escalation, self-change, and root deletion', async () => {
   const users = [{ id: '1', name: 'Member', email: 'member@example.test', role: 'user', createdAt: new Date().toISOString() }, { id: '8', name: 'Root', email: 'root@example.test', role: 'root', createdAt: new Date().toISOString() }];
-  const repository = { listUsers: async () => users, assignRole: async (id, role) => ({ ...users[0], id, role }), deleteUser: async id => id === '7' ? null : users[0] };
+  const repository = { listUsers: async () => ({users,total:users.length}), assignRole: async (id, role) => ({ ...users[0], id, role }), prepareUserDeletion: async id => id === '7' ? null : {user:users[0],blobs:[]}, markDeletionBlobDeleted:async()=>true, finalizeUserDeletion:async id=>id==='7'?null:users[0] };
   for (const role of ['user', 'staff']) {
     assert.equal((await call(createAdminUsersHandler(repository, authorization(role)), 'GET')).statusCode, 403);
     assert.equal((await call(createAdminUsersHandler(repository, authorization(role)), 'PATCH', { id: '1', role: 'staff' })).statusCode, 403);
@@ -74,11 +74,25 @@ test('role revocation is effective on the next request and unauthenticated diffe
 });
 
 test('assigned project members cannot be deleted silently', async () => {
-  const conflict = Object.assign(new Error('foreign key conflict'), { code: '23503' });
-  const handler = createAdminUsersHandler({ listDocumentKeys: async () => [], deleteUser: async () => { throw conflict; } }, authorization('root'));
+  const handler = createAdminUsersHandler({ prepareUserDeletion: async () => ({ conflict: 'project-assignment' }) }, authorization('root'));
   const result = await call(handler, 'DELETE', { id: '12' });
   assert.equal(result.statusCode, 409);
   assert.match(result.payload.error, /assigned to a project/i);
+});
+
+test('member deletion tracks blob cleanup and safely resumes after a partial failure', async () => {
+  const deleted = new Set(); let finalizeCalls = 0; let firstFailure = true;
+  const repository = {
+    prepareUserDeletion: async () => ({ user: { id: '12' }, blobs: ['one','two'].filter(key=>!deleted.has(key)).map(storageKey=>({storageKey})) }),
+    markDeletionBlobDeleted: async (_id,key) => { deleted.add(key); return true; },
+    finalizeUserDeletion: async () => { finalizeCalls += 1; return deleted.size === 2 ? { id: '12' } : { pending: true }; },
+  };
+  const blobs = { deleteBlob: async key => { if (key === 'two' && firstFailure) { firstFailure = false; throw new Error('token=redacted-secret'); } } };
+  const handler = createAdminUsersHandler(repository, authorization('root'), blobs);
+  let result = await call(handler, 'DELETE', { id: '12' });
+  assert.equal(result.statusCode, 503); assert.deepEqual([...deleted], ['one']); assert.equal(finalizeCalls, 0);
+  result = await call(handler, 'DELETE', { id: '12' });
+  assert.equal(result.statusCode, 200); assert.deepEqual([...deleted], ['one','two']); assert.equal(finalizeCalls, 1);
 });
 
 test('role migration is safe, constrained, and defaults existing and new users to user', async () => {
@@ -98,4 +112,18 @@ test('task reconciliation migration safely creates the missing table without des
   assert.match(sql, /status IN \('not-started','in-progress','completed'\)/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS user_tasks_owner_created_idx/);
   assert.doesNotMatch(sql, /DROP|TRUNCATE|DELETE FROM/i);
+});
+
+test('user deletion migration records retryable per-blob cleanup state', async () => {
+  const sql = await readFile(new URL('../db/migrations/012_create_user_deletion_workflow.sql', import.meta.url), 'utf8');
+  assert.match(sql, /deletion_state IN \('active', 'pending'\)/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS user_deletion_jobs/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS user_deletion_blobs/);
+  assert.match(sql, /deleted_at TIMESTAMPTZ/);
+  assert.doesNotMatch(sql, /DROP|TRUNCATE/i);
+  const users = await readFile(new URL('../server/admin-user-repository.js', import.meta.url), 'utf8');
+  const documents = await readFile(new URL('../server/document-repository.js', import.meta.url), 'utf8');
+  assert.match(users, /pg_advisory_xact_lock/);
+  assert.match(documents, /pg_advisory_xact_lock/);
+  assert.match(documents, /deletion_state !== 'active'/);
 });

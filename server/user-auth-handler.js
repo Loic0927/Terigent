@@ -4,6 +4,7 @@ import { clientIp, parseBody, send } from './http.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { clearUserSessionCookie, hashSessionToken, newSessionToken, readUserToken, USER_SESSION_SECONDS, userSessionCookie } from './user-auth.js';
 import { validateLogin, validateProfileUpdate, validateRegistration } from './user-validation.js';
+import { logServerError } from './logger.js';
 
 const keyFor = (req, value) => createHash('sha256').update(`${clientIp(req)}\n${value}`).digest('hex');
 const safeError = (res, message = 'Authentication is temporarily unavailable.') => send(res, 500, { error: message });
@@ -21,7 +22,7 @@ export function createUserAuthHandlers(repository, clock = Date.now) {
       const user=await repository.createUser({...result.data,passwordHash:await hashPassword(result.data.password)});
       await repository.clearAttempts?.(key,'register');
       return send(res,201,{message:'Account created. You can now sign in.',user});
-    } catch(error) { if(error?.code==='23505') return send(res,409,{error:'An account with this email already exists.',errors:{email:'Email is already registered.'}}); console.error('User registration failed:',error instanceof Error?error.message:'Unknown error'); return safeError(res,'Registration is temporarily unavailable.'); }
+    } catch(error) { if(error?.code==='23505') return send(res,409,{error:'An account with this email already exists.',errors:{email:'Email is already registered.'}}); logServerError('auth.member.register',error,req); return safeError(res,'Registration is temporarily unavailable.'); }
   }
   async function login(req,res) {
     if(req.method!=='POST'){res.setHeader('Allow','POST');return send(res,405,{error:'Method not allowed.'});}
@@ -35,7 +36,7 @@ export function createUserAuthHandlers(repository, clock = Date.now) {
       await repository.clearAttempts?.(key,'login');
       const token=newSessionToken(); await repository.createSession({userId:user.id,tokenHash:hashSessionToken(token),expiresAt:new Date(clock()+USER_SESSION_SECONDS*1000)});
       res.setHeader('Set-Cookie',userSessionCookie(token)); const safeUser={...user}; delete safeUser.passwordHash; return send(res,200,{user:safeUser});
-    } catch(error){console.error('User login failed:',error instanceof Error?error.message:'Unknown error');return safeError(res);}
+    } catch(error){logServerError('auth.member.login',error,req);return safeError(res);}
   }
   async function me(req,res){
     res.setHeader('Cache-Control','private, no-store');
@@ -50,8 +51,8 @@ export function createUserAuthHandlers(repository, clock = Date.now) {
       const result=validateProfileUpdate(parsed.body);if(!result.valid)return send(res,400,{error:'Please correct the highlighted fields.',errors:result.errors});
       const updated=await repository.updateUserProfile(user.id,result.data);
       return updated?send(res,200,{message:'Account details updated.',user:updated}):send(res,404,{error:'Account not found.'});
-    }catch(error){console.error('User profile request failed:',error instanceof Error?error.message:'Unknown error');return safeError(res,'Account details are temporarily unavailable.');}
+    }catch(error){logServerError(`auth.member.profile.${req.method.toLowerCase()}`,error,req);return safeError(res,'Account details are temporarily unavailable.');}
   }
-  async function logout(req,res){res.setHeader('Cache-Control','private, no-store');if(req.method!=='POST'){res.setHeader('Allow','POST');return send(res,405,{error:'Method not allowed.'});}if(!hasValidOrigin(req))return send(res,403,{error:'Request origin could not be verified.'});const token=readUserToken(req);try{if(token)await repository.revokeSession(hashSessionToken(token));res.setHeader('Set-Cookie',clearUserSessionCookie());return send(res,200,{authenticated:false});}catch(error){console.error('User logout failed:',error instanceof Error?error.message:'Unknown error');return safeError(res,'Sign-out is temporarily unavailable.');}}
+  async function logout(req,res){res.setHeader('Cache-Control','private, no-store');if(req.method!=='POST'){res.setHeader('Allow','POST');return send(res,405,{error:'Method not allowed.'});}if(!hasValidOrigin(req))return send(res,403,{error:'Request origin could not be verified.'});const token=readUserToken(req);try{if(token)await repository.revokeSession(hashSessionToken(token));res.setHeader('Set-Cookie',clearUserSessionCookie());return send(res,200,{authenticated:false});}catch(error){logServerError('auth.member.logout',error,req);return safeError(res,'Sign-out is temporarily unavailable.');}}
   return {register,login,me,logout};
 }

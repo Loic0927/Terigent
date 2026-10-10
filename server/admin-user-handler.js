@@ -2,24 +2,27 @@ import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
 import { requirePermission } from './rbac.js';
 import { deleteBlob } from './document-blob.js';
+import { logServerError } from './logger.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 
-export function createAdminUsersHandler(repository, authorize = requirePermission) {
+export function createAdminUsersHandler(repository, authorize = requirePermission, blobs = { deleteBlob }) {
   return async function adminUsersHandler(req, res) {
     if (!['GET', 'PATCH', 'DELETE'].includes(req.method)) { res.setHeader('Allow', 'GET, PATCH, DELETE'); return send(res, 405, { error: 'Method not allowed.' }); }
     const permission = req.method === 'GET' ? 'users:view' : req.method === 'PATCH' ? 'users:assign-role' : 'users:delete';
     let principal;
     try { principal = await authorize(req, res, permission); }
-    catch (error) { console.error('User authorization failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'Authorization is temporarily unavailable.' }); }
+    catch (error) { logServerError('users.authorize', error, req); return send(res, 500, { error: 'Authorization is temporarily unavailable.' }); }
     if (!principal) return undefined;
     res.setHeader('Cache-Control', 'private, no-store');
     if (req.method === 'GET') {
       const raw = Array.isArray(req.query?.q) ? null : req.query?.q;
       const search = typeof raw === 'string' ? raw.trim() : '';
       if (raw !== undefined && (raw === null || typeof raw !== 'string' || search.length > 100)) return send(res, 400, { error: 'Invalid search query.' });
-      try { const users = await repository.listUsers(search); return send(res, 200, { users: users.filter(user => user.role !== 'root') }); }
-      catch (error) { console.error('User list failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'Users could not be loaded right now.' }); }
+      const page = Number(req.query?.page || 1); const limit = Number(req.query?.limit || 20);
+      if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) return send(res, 400, { error: 'Invalid pagination parameters.' });
+      try { const result = await repository.listUsers({ search, limit, offset: (page - 1) * limit }); return send(res, 200, { users: result.users.filter(user => user.role !== 'root'), total: result.total, page, limit }); }
+      catch (error) { logServerError('users.list', error, req); return send(res, 500, { error: 'Users could not be loaded right now.' }); }
     }
     if (!hasValidOrigin(req)) return send(res, 403, { error: 'Request origin could not be verified.' });
     const parsed = parseBody(req, 1000);
@@ -35,12 +38,22 @@ export function createAdminUsersHandler(repository, authorize = requirePermissio
         return user ? send(res, 200, { message: 'User role updated.', user }) : send(res, 404, { error: 'Eligible user not found.' });
       }
       if (keys.length !== 1 || !keys.includes('id')) return send(res, 400, { error: 'Only a user ID may be supplied.' });
-      if (repository.listDocumentKeys) {
-        const documents = await repository.listDocumentKeys(id);
-        for (const document of documents) await deleteBlob(document.storageKey);
+      const deletion = await repository.prepareUserDeletion(id);
+      if (!deletion) return send(res, 404, { error: 'Eligible user not found.' });
+      if (deletion.conflict === 'project-assignment') return send(res, 409, { error: 'This user is assigned to a project and cannot be deleted until the assignment is removed.' });
+      for (const document of deletion.blobs) {
+        try {
+          await blobs.deleteBlob(document.storageKey);
+          await repository.markDeletionBlobDeleted(id, document.storageKey);
+        } catch (error) {
+          logServerError('users.delete.blob-cleanup', error, req);
+          return send(res, 503, { error: 'User deletion is pending file cleanup. Retry deletion to continue safely.' });
+        }
       }
-      const user = await repository.deleteUser(id);
+      const user = await repository.finalizeUserDeletion(id);
+      if (user?.conflict === 'project-assignment') return send(res, 409, { error: 'This user is assigned to a project and cannot be deleted until the assignment is removed.' });
+      if (user?.pending) return send(res, 503, { error: 'User deletion is pending file cleanup. Retry deletion to continue safely.' });
       return user ? send(res, 200, { message: 'User deleted.' }) : send(res, 404, { error: 'Eligible user not found.' });
-    } catch (error) { if (error?.code === '23503') return send(res, 409, { error: 'This user is assigned to a project and cannot be deleted until the assignment is removed.' }); console.error('User management failed:', error instanceof Error ? error.message : 'Unknown error'); return send(res, 500, { error: 'The user could not be changed right now.' }); }
+    } catch (error) { if (error?.code === '23503') return send(res, 409, { error: 'This user is assigned to a project and cannot be deleted until the assignment is removed.' }); logServerError('users.manage', error, req); return send(res, 500, { error: 'The user could not be changed right now.' }); }
   };
 }

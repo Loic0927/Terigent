@@ -2,6 +2,7 @@ import { isAdmin } from './auth.js';
 import { getPool } from './database.js';
 import { hashSessionToken, readUserToken } from './user-auth.js';
 import { send } from './http.js';
+import { logServerError } from './logger.js';
 
 export const PERMISSIONS = Object.freeze({
   ROOT: Object.freeze([
@@ -20,7 +21,7 @@ export async function findMemberPrincipal(tokenHash) {
   const result = await getPool().query(
     `SELECT u.id::text, u.name, u.email, u.role
        FROM user_sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP`,
+      WHERE s.token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP AND u.deletion_state = 'active'`,
     [tokenHash],
   );
   return result.rows[0] || null;
@@ -43,7 +44,7 @@ export async function requirePermission(req, res, permission, lookup) {
   let principal;
   try { principal = await getAuthenticatedPrincipal(req, lookup); }
   catch (error) {
-    console.error('Authorization lookup failed:', error instanceof Error ? error.message : 'Unknown error');
+    logServerError('authorization.lookup', error, req);
     send(res, 500, { error: 'Authorization is temporarily unavailable.' });
     return null;
   }

@@ -14,7 +14,7 @@ export async function listClients({ search, limit, offset }) {
 export async function createClient(data) { const result=await getPool().query(`INSERT INTO clients(name,email,phone) VALUES($1,$2,$3) RETURNING id::text,name,email,phone,created_at AS "createdAt",updated_at AS "updatedAt"`,[data.name,data.email,data.phone]); return {...result.rows[0],projectCount:0}; }
 export async function updateClient(id,data) { const result=await getPool().query(`UPDATE clients SET name=$2,email=$3,phone=$4,updated_at=CURRENT_TIMESTAMP WHERE id=$1 RETURNING id::text,name,email,phone,created_at AS "createdAt",updated_at AS "updatedAt"`,[id,data.name,data.email,data.phone]); return result.rows[0]||null; }
 export async function deleteClient(id) { try { const result=await getPool().query('DELETE FROM clients WHERE id=$1 RETURNING id::text',[id]); return result.rows[0]||null; } catch(error) { if(error?.code==='23503') return { conflict:true }; throw error; } }
-export async function listStaff() { const result=await getPool().query(`SELECT id::text,name,email FROM users WHERE role='staff' ORDER BY name,email,id LIMIT 200`); return result.rows; }
+export async function listStaff() { const result=await getPool().query(`SELECT id::text,name,email FROM users WHERE role='staff' AND deletion_state='active' ORDER BY name,email,id LIMIT 200`); return result.rows; }
 
 export async function listProjects({ principal, search, status, limit, offset }) {
   const value=search?`%${search.toLowerCase()}%`:null; const staff=principal.role==='staff';
@@ -30,7 +30,7 @@ export async function projectExists(id) { const result=await getPool().query('SE
 
 async function validateRelations(client,data) {
   const foundClient=await client.query('SELECT id FROM clients WHERE id=$1 FOR SHARE',[data.clientId]); if(!foundClient.rows[0]) return 'client';
-  if(data.memberIds.length){const staff=await client.query(`SELECT id::text FROM users WHERE role='staff' AND id=ANY($1::bigint[]) FOR SHARE`,[data.memberIds]);if(staff.rows.length!==data.memberIds.length)return 'members';}
+  if(data.memberIds.length){const staff=await client.query(`SELECT id::text FROM users WHERE role='staff' AND deletion_state='active' AND id=ANY($1::bigint[]) FOR SHARE`,[data.memberIds]);if(staff.rows.length!==data.memberIds.length)return 'members';}
   return null;
 }
 export async function createProject(data,principal) { const client=await getPool().connect();try{await client.query('BEGIN');const invalid=await validateRelations(client,data);if(invalid){await client.query('ROLLBACK');return {invalid};}const made=await client.query(`INSERT INTO projects(client_id,name,description,status,progress) VALUES($1,$2,$3,$4,$5) RETURNING id::text`,[data.clientId,data.name,data.description,data.status,data.progress]);if(data.memberIds.length)await client.query(`INSERT INTO project_members(project_id,user_id) SELECT $1,unnest($2::bigint[])`,[made.rows[0].id,data.memberIds]);await client.query('COMMIT');return {project:await getProject(made.rows[0].id,principal)};}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();} }

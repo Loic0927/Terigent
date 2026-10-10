@@ -89,3 +89,4 @@
 
 .project-list-heading form select{flex:0 0 165px;width:165px}.project-list-heading form .button{flex:0 0 auto}.project-list-heading form,.project-list-heading form>*{min-width:0}
 @media(max-width:800px){.project-list-heading form{width:100%;max-width:100%}.project-list-heading form input{width:100%;min-width:0;max-width:none}.project-list-heading form select{width:100%;min-width:0}.project-list-heading form .button{width:100%;max-width:100%}}
+.task-card-actions{display:flex;align-items:center;gap:3px}

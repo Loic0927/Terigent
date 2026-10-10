@@ -1,4 +1,5 @@
 import { validateContact } from './contact-validation.js';
+import { logServerError } from './logger.js';
 
 const MAX_BODY_BYTES = 12_000;
 const WINDOW_MS = 60_000;
@@ -59,7 +60,7 @@ export function createContactHandler({ createInquiry, now = Date.now, rateLimit 
         inquiry: { id: inquiry.id, createdAt: inquiry.createdAt },
       });
     } catch (error) {
-      console.error('Contact inquiry persistence failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError('contact.create', error, req);
       return send(res, 500, { error: 'We could not send your inquiry right now. Please try again later.' });
     }
   };

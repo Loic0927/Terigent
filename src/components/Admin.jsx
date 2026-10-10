@@ -26,6 +26,12 @@ function validate(form, fields) {
   return errors;
 }
 
+function Pagination({ meta, onPage, label }) {
+  const pages = Math.max(1, Math.ceil(meta.total / meta.limit));
+  if (meta.total <= meta.limit) return null;
+  return <nav className="service-pagination" aria-label={`${label} pages`}><button className="button button-ghost button-small" disabled={meta.page <= 1} onClick={() => onPage(meta.page - 1)}>Previous</button><span>Page {meta.page} of {pages}</span><button className="button button-ghost button-small" disabled={meta.page >= pages} onClick={() => onPage(meta.page + 1)}>Next</button></nav>;
+}
+
 export default function Admin() {
   const [auth, setAuth] = useState('checking');
   const [role, setRole] = useState(null);
@@ -38,6 +44,7 @@ export default function Admin() {
   const [requestFilter, setRequestFilter] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [requestState, setRequestState] = useState({ state: 'loading', notice: '' });
+  const [requestMeta, setRequestMeta] = useState({ page: 1, limit: 20, total: 0 });
   const [listState, setListState] = useState({ announcements: 'loading', services: 'loading' });
   const [announcementForm, setAnnouncementForm] = useState(EMPTY_ANNOUNCEMENT);
   const [serviceForm, setServiceForm] = useState(EMPTY_SERVICE);
@@ -48,6 +55,7 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
   const [userState, setUserState] = useState({ state: 'idle', notice: '' });
+  const [userMeta, setUserMeta] = useState({ page: 1, limit: 20, total: 0 });
   const [signingOut, setSigningOut] = useState(false);
   const announcementEditorRef = useRef(null);
   const announcementTitleRef = useRef(null);
@@ -69,14 +77,14 @@ export default function Admin() {
       else setAnnouncementState({ ...cleanState, notice: /^[1-9]\d*$/.test(requestedId) ? 'The requested announcement was not found. It may have been deleted.' : 'The requested announcement ID is invalid.' });
     }
   }, []);
-  const loadRequests = useCallback(async (status = '') => {
+  const loadRequests = useCallback(async (status = '', page = 1) => {
     setRequestState({ state: 'loading', notice: '' });
-    try { const payload = await api(`/api/admin/customer-requests?limit=50${status ? `&status=${encodeURIComponent(status)}` : ''}`); setRequests(payload.requests || []); setRequestState({ state: 'ready', notice: '' }); }
+    try { const payload = await api(`/api/admin/customer-requests?page=${page}&limit=20${status ? `&status=${encodeURIComponent(status)}` : ''}`); setRequests(payload.requests || []); setRequestMeta({ page: payload.page || page, limit: payload.limit || 20, total: payload.total || 0 }); setRequestState({ state: 'ready', notice: '' }); }
     catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState({ state: 'error', notice: error.message }); }
   }, []);
-  const loadUsers = useCallback(async (search = '') => {
+  const loadUsers = useCallback(async (search = '', page = 1) => {
     setUserState({ state: 'loading', notice: '' });
-    try { const payload = await api(`/api/admin/users${search ? `?q=${encodeURIComponent(search)}` : ''}`); setUsers((payload.users || []).filter(user => user.role !== 'root')); setUserState({ state: 'ready', notice: '' }); }
+    try { const payload = await api(`/api/admin/users?page=${page}&limit=20${search ? `&q=${encodeURIComponent(search)}` : ''}`); setUsers((payload.users || []).filter(user => user.role !== 'root')); setUserMeta({ page: payload.page || page, limit: payload.limit || 20, total: payload.total || 0 }); setUserState({ state: 'ready', notice: '' }); }
     catch (error) { setUserState({ state: 'error', notice: error.message }); }
   }, []);
   useEffect(() => { api('/api/admin/auth/session').then(result => {
@@ -103,7 +111,7 @@ export default function Admin() {
     setUserState({ state: 'ready', notice: 'Updating user...' });
     try {
       await api('/api/admin/users', { method: action === 'delete' ? 'DELETE' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'delete' ? { id: user.id } : { id: user.id, role: action }) });
-      await loadUsers(userSearch); setUserState({ state: 'ready', notice: action === 'delete' ? 'User deleted.' : 'User role updated.' });
+      await loadUsers(userSearch, userMeta.page); setUserState({ state: 'ready', notice: action === 'delete' ? 'User deleted.' : 'User role updated.' });
     } catch (error) { setUserState({ state: 'error', notice: error.message }); }
   };
 
@@ -135,7 +143,7 @@ export default function Admin() {
     } catch (error) { if (error.status === 401) setAuth('anonymous'); else window.alert(error.message); }
   };
   const openRequest = async item => { setRequestState(current => ({ ...current, notice: '' })); try { const payload = await api(`/api/admin/customer-requests/${item.id}`); setSelectedRequest(payload.request); } catch (error) { setRequestState({ state: 'error', notice: error.message }); } };
-  const changeRequestStatus = async status => { if (!selectedRequest) return; setRequestState(current => ({ ...current, notice: 'Updating status...' })); try { const payload = await api(`/api/admin/customer-requests/${selectedRequest.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); setSelectedRequest(payload.request); await loadRequests(requestFilter); setRequestState({ state: 'ready', notice: 'Status updated successfully.' }); } catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState(current => ({ ...current, notice: error.message })); } };
+  const changeRequestStatus = async status => { if (!selectedRequest) return; setRequestState(current => ({ ...current, notice: 'Updating status...' })); try { const payload = await api(`/api/admin/customer-requests/${selectedRequest.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); setSelectedRequest(payload.request); await loadRequests(requestFilter, requestMeta.page); setRequestState({ state: 'ready', notice: 'Status updated successfully.' }); } catch (error) { if (error.status === 401) setAuth('anonymous'); setRequestState(current => ({ ...current, notice: error.message })); } };
 
   if (auth === 'checking') return <main className="admin-shell"><p role="status">Checking administrator session...</p></main>;
   if (auth === 'forbidden') return <main className="admin-shell"><div className="admin-login"><Logo /><h1>Access denied</h1><p>Your account does not have administrator permissions.</p><a className="button" href="/dashboard">Return to dashboard</a></div></main>;
@@ -148,12 +156,12 @@ export default function Admin() {
   const editService = item => { setEditingService(item.id); setServiceForm({ name: item.name, description: item.description, category: item.category, pricingText: item.pricingText || '', active: item.active }); setServiceState(cleanState); document.querySelector('#service-editor')?.scrollIntoView({ behavior: 'smooth' }); };
 
   return <main className="admin-shell"><div className="admin-page"><header className="admin-header"><div className="admin-heading"><Logo href="/" /><h1>Company management</h1><p>Signed in as <strong>{role}</strong></p></div><a className="button button-small admin-project-link" href="/projects">{role==='root'?'Manage clients & projects':'My assigned projects'}</a></header>
-    {role === 'root' && <><section className="admin-panel" id="user-management"><h2>Staff / User Management</h2><form className="admin-user-search" onSubmit={event => { event.preventDefault(); loadUsers(userSearch); }}><input aria-label="Search users by name or email" value={userSearch} maxLength="100" placeholder="Search name or email" onChange={event => setUserSearch(event.target.value)} /><button className="button button-small">Search</button></form>
+    {role === 'root' && <><section className="admin-panel" id="user-management"><h2>Staff / User Management</h2><form className="admin-user-search" onSubmit={event => { event.preventDefault(); loadUsers(userSearch, 1); }}><input aria-label="Search users by name or email" value={userSearch} maxLength="100" placeholder="Search name or email" onChange={event => setUserSearch(event.target.value)} /><button className="button button-small">Search</button></form>
       {userState.state === 'loading' && <p role="status">Loading users...</p>}{userState.notice && <p className={`admin-notice ${userState.state === 'error' ? 'error' : 'success'}`} role="status">{userState.notice}</p>}{userState.state === 'ready' && !users.length && <p>No users match this search.</p>}
-      <div className="admin-list user-list">{users.map(user => <article key={user.id}><div><h3>{user.name}</h3><p>{user.email}</p><small>{user.role} · Joined {new Date(user.createdAt).toLocaleString()}</small></div><div>{user.role === 'user' && <button className="button button-small" onClick={() => changeUser(user, 'staff')}>Grant staff</button>}{user.role === 'staff' && <button className="button button-ghost button-small" onClick={() => changeUser(user, 'user')}>Revoke staff</button>}{user.role !== 'root' && <button className="button button-danger button-small" onClick={() => changeUser(user, 'delete')}><HiOutlineTrash /> Delete</button>}</div></article>)}</div>
-    </section><section className="admin-panel" id="customer-requests"><div className="request-panel-heading"><h2>Customer requests</h2><select aria-label="Filter customer requests by status" value={requestFilter} onChange={event => { setRequestFilter(event.target.value); setSelectedRequest(null); loadRequests(event.target.value); }}><option value="">All statuses</option>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
-      {requestState.state === 'loading' && <p role="status">Loading customer requests...</p>}{requestState.state === 'error' && <p className="admin-notice error" role="alert">{requestState.notice} <button onClick={() => loadRequests(requestFilter)}>Try again</button></p>}{requestState.state === 'ready' && !requests.length && <p>No customer requests match this filter.</p>}
-      <div className="request-list">{requests.map(item => <button type="button" key={item.id} className={selectedRequest?.id === item.id ? 'selected' : ''} onClick={() => openRequest(item)}><span><strong>{item.subject}</strong><small>{item.fullName} · {new Date(item.createdAt).toLocaleString()}</small></span><span className={`request-status status-${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span><HiOutlineEye /></button>)}</div>
+      <div className="admin-list user-list">{users.map(user => <article key={user.id}><div><h3>{user.name}</h3><p>{user.email}</p><small>{user.role} · Joined {new Date(user.createdAt).toLocaleString()}</small></div><div>{user.role === 'user' && <button className="button button-small" onClick={() => changeUser(user, 'staff')}>Grant staff</button>}{user.role === 'staff' && <button className="button button-ghost button-small" onClick={() => changeUser(user, 'user')}>Revoke staff</button>}{user.role !== 'root' && <button className="button button-danger button-small" onClick={() => changeUser(user, 'delete')}><HiOutlineTrash /> Delete</button>}</div></article>)}</div><Pagination meta={userMeta} label="User results" onPage={page => loadUsers(userSearch, page)} />
+    </section><section className="admin-panel" id="customer-requests"><div className="request-panel-heading"><h2>Customer requests</h2><select aria-label="Filter customer requests by status" value={requestFilter} onChange={event => { setRequestFilter(event.target.value); setSelectedRequest(null); loadRequests(event.target.value, 1); }}><option value="">All statuses</option>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></div>
+      {requestState.state === 'loading' && <p role="status">Loading customer requests...</p>}{requestState.state === 'error' && <p className="admin-notice error" role="alert">{requestState.notice} <button onClick={() => loadRequests(requestFilter, requestMeta.page)}>Try again</button></p>}{requestState.state === 'ready' && !requests.length && <p>No customer requests match this filter.</p>}
+      <div className="request-list">{requests.map(item => <button type="button" key={item.id} className={selectedRequest?.id === item.id ? 'selected' : ''} onClick={() => openRequest(item)}><span><strong>{item.subject}</strong><small>{item.fullName} · {new Date(item.createdAt).toLocaleString()}</small></span><span className={`request-status status-${item.status.toLowerCase().replace(' ', '-')}`}>{item.status}</span><HiOutlineEye /></button>)}</div><Pagination meta={requestMeta} label="Customer request results" onPage={page => { setSelectedRequest(null); loadRequests(requestFilter, page); }} />
       {selectedRequest && <article className="request-detail"><div className="request-detail-heading"><div><small>Request #{selectedRequest.id}</small><h3>{selectedRequest.subject}</h3></div><label>Status <select value={selectedRequest.status} onChange={event => changeRequestStatus(event.target.value)}>{REQUEST_STATUSES.map(status => <option key={status}>{status}</option>)}</select></label></div><dl><div><dt>Customer</dt><dd>{selectedRequest.fullName}</dd></div><div><dt>Email</dt><dd><a href={`mailto:${selectedRequest.email}`}>{selectedRequest.email}</a></dd></div><div><dt>Submitted</dt><dd>{new Date(selectedRequest.createdAt).toLocaleString()}</dd></div></dl><p>{selectedRequest.details}</p>{requestState.notice && <p className={`admin-notice ${requestState.notice.includes('success') ? 'success' : ''}`} role="status">{requestState.notice}</p>}</article>}
     </section></>}
     <section className="admin-panel" id="service-editor"><h2>{editingService ? 'Edit service' : 'New service'}</h2><form className="admin-form service-form" onSubmit={submitService} noValidate>

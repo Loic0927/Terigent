@@ -6,13 +6,13 @@ export async function createUser({ name, email, passwordHash }) {
   return result.rows[0];
 }
 export async function findUserForLogin(email) {
-  const result = await getPool().query(`SELECT ${publicColumns}, password_hash AS "passwordHash" FROM users WHERE email=$1`, [email]); return result.rows[0] || null;
+  const result = await getPool().query(`SELECT ${publicColumns}, password_hash AS "passwordHash" FROM users WHERE email=$1 AND deletion_state='active'`, [email]); return result.rows[0] || null;
 }
 export async function createSession({ userId, tokenHash, expiresAt }) {
   await getPool().query('INSERT INTO user_sessions (user_id,token_hash,expires_at) VALUES ($1,$2,$3)', [userId, tokenHash, expiresAt]);
 }
 export async function findSession(tokenHash) {
-  const result = await getPool().query(`SELECT u.id::text, u.name, u.email, u.role, u.created_at AS "createdAt" FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>CURRENT_TIMESTAMP`, [tokenHash]); return result.rows[0] || null;
+  const result = await getPool().query(`SELECT u.id::text, u.name, u.email, u.role, u.created_at AS "createdAt" FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>CURRENT_TIMESTAMP AND u.deletion_state='active'`, [tokenHash]); return result.rows[0] || null;
 }
 export async function updateUserProfile(userId, { name }) {
   const result = await getPool().query(`UPDATE users SET name=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING ${publicColumns}`, [name, userId]);

@@ -2,6 +2,7 @@ import { hasValidOrigin } from './auth.js';
 import { parseBody, send } from './http.js';
 import { requirePermission } from './rbac.js';
 import { validateAnnouncement } from './announcement-validation.js';
+import { logServerError } from './logger.js';
 
 const validId = value => /^(?:[1-9]\d*)$/.test(String(value || ''));
 
@@ -11,7 +12,7 @@ export function createAnnouncementsHandler(repository, authorize = requirePermis
       res.setHeader('Cache-Control', 'no-store');
       try { return send(res, 200, { announcements: await repository.listAnnouncements() }); }
       catch (error) {
-        console.error('Announcement list failed:', error instanceof Error ? error.message : 'Unknown error');
+        logServerError('announcements.list', error, req);
         return send(res, 500, { error: 'Announcements could not be loaded right now.' });
       }
     }
@@ -25,7 +26,7 @@ export function createAnnouncementsHandler(repository, authorize = requirePermis
     if (!validation.valid) return send(res, 400, { error: 'Please correct the highlighted fields.', errors: validation.errors });
     try { return send(res, 201, { announcement: await repository.createAnnouncement(validation.data) }); }
     catch (error) {
-      console.error('Announcement creation failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError('announcements.create', error, req);
       return send(res, 500, { error: 'The announcement could not be created right now.' });
     }
   };
@@ -51,7 +52,7 @@ export function createAnnouncementItemHandler(repository, authorize = requirePer
       const updated = await repository.updateAnnouncement(id, validation.data);
       return updated ? send(res, 200, { announcement: updated }) : send(res, 404, { error: 'Announcement not found.' });
     } catch (error) {
-      console.error('Announcement mutation failed:', error instanceof Error ? error.message : 'Unknown error');
+      logServerError(`announcements.${req.method === 'DELETE' ? 'delete' : 'update'}`, error, req);
       return send(res, 500, { error: 'The announcement could not be changed right now.' });
     }
   };
